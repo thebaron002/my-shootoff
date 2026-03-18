@@ -1,0 +1,1122 @@
+import groovyx.gpars.GParsPool
+import groovy.xml.NamespaceBuilder
+import org.kohsuke.github.GitHub
+import org.ajoberstar.grgit.Grgit
+import org.ajoberstar.grgit.Credentials
+
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        maven {
+            url = uri("https://repo.jenkins-ci.org/releases/")
+        }
+    }
+    dependencies {
+        classpath 'org.codehaus.gpars:gpars:1.1.0'
+        classpath 'org.kohsuke:github-api:1.+'
+    }
+}
+
+plugins {
+    id 'org.ajoberstar.grgit' version '1.3.2'
+}
+
+apply plugin: 'java'
+apply plugin: 'eclipse'
+
+eclipse {
+    jdt {
+        sourceCompatibility = 1.8
+        targetCompatibility = 1.8
+    }
+}
+
+def javaHome = System.properties['java.home']
+def vendoredRuntimeLibsDir = file('vendor/runtime-libs')
+def vendoredNativeLibDir = file('vendor/native/opencv')
+def defaultLegacyRuntimeDir = new File(System.properties['user.home'], 'Downloads/shootoff-4.0-final').path
+def legacyRuntimeDir = providers.gradleProperty('shootoffRuntimeDir')
+    .orElse(System.getenv('SHOOTOFF_RUNTIME_DIR') ?: defaultLegacyRuntimeDir)
+    .get()
+def externalLegacyRuntimeLibsDir = file("${legacyRuntimeDir}/libs")
+def externalLegacyNativeLibDir = file("${legacyRuntimeDir}/native/opencv")
+def runtimeLibsDir = vendoredRuntimeLibsDir.isDirectory() ? vendoredRuntimeLibsDir : externalLegacyRuntimeLibsDir
+def nativeLibDir = vendoredNativeLibDir.isDirectory() ? vendoredNativeLibDir : externalLegacyNativeLibDir
+def useRuntimeLibs = runtimeLibsDir.isDirectory()
+def javafxJmodsDir = file("${javaHome}/jmods")
+def legacyJavafxAntJar = file("$javaHome/../lib/ant-javafx.jar")
+def hasLegacyJavafxAnt = legacyJavafxAntJar.exists()
+def javafxModules = [
+    'javafx.controls',
+    'javafx.fxml',
+    'javafx.graphics',
+    'javafx.media',
+    'javafx.swing',
+    'javafx.web'
+]
+def jpackageRuntimeModules = (javafxModules + [
+    'java.base',
+    'java.compiler',
+    'java.desktop',
+    'java.instrument',
+    'java.logging',
+    'java.management',
+    'java.naming',
+    'java.prefs',
+    'java.rmi',
+    'java.security.jgss',
+    'java.sql',
+    'java.xml',
+    'jdk.jdi',
+    'jdk.management',
+    'jdk.unsupported'
+]).unique()
+def modernRuntimeDir = file("${buildDir}/modern-runtime")
+def jpackageExecutable = file("${javaHome}/bin/jpackage.exe")
+def windowsIconFile = file('src/main/resources/images/windows_icon.ico')
+def appVendor = 'ShootOFF'
+def appDescription = 'A virtual shooting range to enhance laser dry fire training'
+def appHomePlaceholder = '$APPDIR'
+def jpackageBaseDir = file("${buildDir}/jpackage")
+def jpackageInputDir = file("${jpackageBaseDir}/input")
+def jpackageTempDir = file("${jpackageBaseDir}/temp")
+def jpackageAppImageOutputDir = file("${jpackageBaseDir}/app-image")
+def jpackageAppImageDir = file("${jpackageAppImageOutputDir}/ShootOFF")
+def installerOutputDir = file("${buildDir}/installer")
+def winUpgradeUuid = '75714003-bbcd-40d5-9e3b-d8c3ad4cfcdd'
+def localWix3Dir = file('.tools/wix3/extract')
+def localWix6Dir = file('.tools/wix-extract/PFiles64/WiX Toolset v6.0/bin')
+def localToolPathEntries = localWix3Dir.isDirectory()
+    ? [localWix3Dir.absolutePath]
+    : (localWix6Dir.isDirectory() ? [localWix6Dir.absolutePath] : [])
+
+ext.extProp = new Properties()
+extProp.load(new FileInputStream("src/main/resources/version.properties"))
+def version = extProp["version"]
+def installerVersion = version.count('.') == 1 ? "${version}.0" : version
+
+def username = ''                                           // Username for GitHub (will request JIT via console input)
+def password = ''                                           // Password for GitHub (will request JIT via console input)
+def gh = null
+def grgit = null
+
+def dist = 'build/dist/'
+def archivePath = dist + 'ShootOFF.jar'
+def libTempDir = dist + 'libs'                              // Location of ShootOFF's dependencies staged for release
+def webstartDir = "${project.buildDir}/webstart/"           // The staging area for the JWS release
+
+def bundleDir = "${project.buildDir}/deploy/" 				// Here be bundles
+
+def jwsDir = 'jws/'
+def mainClassName = 'com.shootoff.Main'
+def writableResources = 'shootoff-writable-resources.jar'   // JAR to contain files that should be writable (targets, settings, etc.) for JWS
+def writableResourcesMetadata = 'shootoff-writable-resources.xml'
+def diagnosticsJar = 'ShootOFF-diagnostics.jar'
+def releaseZip = 'shootoff-' + version + '-final.zip'
+def releaseMsi = 'ShootOFF' + '-' + version + '.msi'
+def license = 'GPLv3'
+
+def keyStore = 'shootoff_cs.jks'
+def keyAlias = 'cscert'
+def tsaURL = 'http://timestamp.comodoca.com/rfc3161'
+
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://repo.jenkins-ci.org/releases/")
+    }
+}
+
+configurations {
+    jfxant
+
+    // Some dependencies (webcam-capture and marytts?) pull in slf4j implementations that conflict
+    // with logback
+    configureEach {
+        exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+}
+
+dependencies {
+    if (hasLegacyJavafxAnt) {
+        jfxant files(legacyJavafxAntJar)
+    }
+
+    if (useRuntimeLibs) {
+        logger.lifecycle("Using runtime libs from ${runtimeLibsDir}")
+        implementation fileTree(dir: runtimeLibsDir, include: ['*.jar'])
+    } else {
+        // FindBugs annotations to suppress warnings
+        implementation group: 'com.google.code.findbugs', name: 'annotations', version: '3.0.1'
+
+        // Raven, exception reporting client (requires logback)
+        implementation group: 'com.getsentry.raven', name: 'raven-logback', version: '7.8.6'
+
+        // Logback to enable exception reporting
+        implementation group: 'ch.qos.logback', name: 'logback-core', version: '1.2.3'
+        implementation group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.3'
+
+        // bridj is here because webcam-capture depends on it but fetches 0.6.2, which
+        // does not play nicely with stackguard in newer versions of the JVM.
+        implementation group: 'com.nativelibs4java', name: 'bridj', version: '0.7.0'
+        implementation group: 'com.github.sarxos', name: 'webcam-capture', version: '0.3.11'
+        implementation group: 'com.github.sarxos', name: 'webcam-capture-driver-ipcam', version: '0.3.11'
+        implementation group: 'com.github.sarxos', name: 'webcam-capture-driver-v4l4j', version: '0.3.11'
+
+        implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+        implementation group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.3'
+        implementation group: 'org.apache.httpcomponents', name: 'httpmime', version: '4.5.3'
+
+        // tts dependencies
+        implementation group: 'de.dfki.mary', name: 'marytts-runtime', version: '5.1.2'
+        implementation group: 'de.dfki.mary', name: 'marytts-lang-en', version: '5.1.2'
+        implementation group: 'de.dfki.mary', name: 'voice-cmu-slt-hsmm', version: '5.1.2'
+
+        // xuggle for recording and playing back video
+        implementation group: 'xuggle', name: 'xuggle-xuggler', version: '5.4'
+
+        // JSON
+        implementation group: 'com.googlecode.json-simple', name: 'json-simple', version: '1.1.1'
+
+        // OpenImaj
+        implementation('org.openimaj:core:1.3.5') {
+            // OpenImaj transitive dependency that we don't need and that doesn't seem to exist in
+            // repos anymore
+            exclude group: 'vigna.dsi.unimi.it'
+        }
+
+        //OpenCV
+        implementation 'org.openpnp:opencv:2.4.13-0'
+
+        // OSHI to collect HW and system state data
+        implementation group: 'com.github.dblock', name: 'oshi-core', version: '3.4.0'
+
+        // JSoup to get processor benchmark data
+        implementation group: 'org.jsoup', name: 'jsoup', version: '1.9.1'
+        
+        // Bluetooth libraries, QR code generator, and JSON serializer for headless mode
+        implementation 'net.sf.bluecove:bluecove:2.1.0'
+        // Assumption that headless mode will only be supported on Linux
+        implementation 'net.sf.bluecove:bluecove-gpl:2.1.0'
+        implementation 'com.google.zxing:core:3.3.0'
+        implementation 'com.google.code.gson:gson:2.8.0'
+    }
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.hamcrest:hamcrest-core:1.3'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    if (javafxJmodsDir.isDirectory() && file("${javafxJmodsDir}/javafx.controls.jmod").exists()) {
+        options.compilerArgs += [
+            '--module-path', javafxJmodsDir.absolutePath,
+            '--add-modules', javafxModules.join(',')
+        ]
+    }
+}
+
+tasks.withType(Test).configureEach {
+    jvmArgs += [
+        '--enable-native-access=ALL-UNNAMED',
+        '--enable-native-access=javafx.graphics'
+    ]
+
+    if (nativeLibDir.isDirectory()) {
+        systemProperty 'java.library.path', nativeLibDir.absolutePath
+        environment 'PATH', "${nativeLibDir.absolutePath};${System.getenv('PATH')}"
+    }
+}
+
+jar {
+    archiveBaseName.set('ShootOFF')
+    manifest {
+        attributes(
+            'Main-Class': mainClassName,
+            'Application-Name': 'ShootOFF',
+            'Created-By': 'ShootOFF Modernized Build'
+        )
+    }
+}
+
+def configureLegacyAntFx = {
+    if (!hasLegacyJavafxAnt) {
+        throw new GradleException("Legacy JavaFX Ant tasks require ant-javafx.jar from a Java 8 JDK.")
+    }
+
+    ant.taskdef(
+        resource: 'com/sun/javafx/tools/ant/antlib.xml',
+        uri: 'javafx:com.sun.javafx.tools.ant',
+        classpath: configurations.jfxant.asPath)
+}
+
+def deleteDirectoryWithRetries = { File targetDir, int maxAttempts = 5, long delayMs = 1000L ->
+    if (!targetDir.exists()) {
+        return
+    }
+
+    Exception lastFailure = null
+
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            project.delete(targetDir)
+            if (!targetDir.exists()) {
+                return
+            }
+        } catch (Exception ex) {
+            lastFailure = ex
+        }
+
+        if (attempt < maxAttempts) {
+            logger.lifecycle("Retrying cleanup of ${targetDir} (${attempt}/${maxAttempts})...")
+            Thread.sleep(delayMs)
+        }
+    }
+
+    throw new GradleException(
+        "Unable to clean staged runtime at ${targetDir}. Close any running ShootOFF windows and try again.",
+        lastFailure
+    )
+}
+
+def runExternalCommand = { List<String> command, File workingDir ->
+    def normalizedCommand = command.collect { it.toString() }
+    logger.lifecycle("Running external command: ${normalizedCommand.join(' ')}")
+
+    def processBuilder = new ProcessBuilder(normalizedCommand)
+        .directory(workingDir)
+        .redirectErrorStream(true)
+
+    if (!localToolPathEntries.isEmpty()) {
+        def environment = processBuilder.environment()
+        def existingPath = environment.get('PATH') ?: ''
+        environment.put('PATH', localToolPathEntries.join(File.pathSeparator) + File.pathSeparator + existingPath)
+    }
+
+    def process = processBuilder.start()
+
+    def commandOutput = new StringBuilder()
+    process.inputStream.eachLine { line ->
+        logger.lifecycle(line)
+        commandOutput.append(line).append(System.lineSeparator())
+    }
+
+    int exitCode = process.waitFor()
+    if (exitCode != 0) {
+        throw new GradleException("External command failed with exit code ${exitCode}:${System.lineSeparator()}${commandOutput}")
+    }
+}
+
+tasks.register('stageModernRuntime') {
+    dependsOn('build')
+    description = 'Stage a runnable modern runtime layout for ShootOFF'
+    group = 'Package'
+
+    doLast {
+        deleteDirectoryWithRetries(modernRuntimeDir)
+
+        copy {
+            from(tasks.named('jar'))
+            into modernRuntimeDir
+            rename { 'ShootOFF.jar' }
+        }
+
+        copy {
+            from(runtimeLibsDir)
+            into file("${modernRuntimeDir}/libs")
+            include '*.jar'
+        }
+
+        ant.copy(todir: file("${modernRuntimeDir}/native/opencv")) {
+            fileset(dir: nativeLibDir)
+        }
+
+        copy {
+            from('courses')
+            into file("${modernRuntimeDir}/courses")
+        }
+
+        copy {
+            from('sounds')
+            into file("${modernRuntimeDir}/sounds")
+        }
+
+        copy {
+            from('targets')
+            into file("${modernRuntimeDir}/targets")
+        }
+
+        if (file('exercises').exists()) {
+            copy {
+                from('exercises')
+                into file("${modernRuntimeDir}/exercises")
+            }
+        }
+
+        copy {
+            from('shootoff.properties', 'eyeCam32.dll', 'eyeCam64.dll', 'LICENSE')
+            into modernRuntimeDir
+        }
+
+        file("${modernRuntimeDir}/Run-ShootOFF.bat").text = '''@echo off
+setlocal
+
+set "APP_DIR=%~dp0"
+set "JAVA_EXE=java"
+set "NATIVE_DIR=%APP_DIR%native\\opencv"
+set "APP_JAR=%APP_DIR%ShootOFF.jar"
+set "APP_CP=%APP_JAR%;%APP_DIR%libs\\*"
+set "JMODS_DIR="
+
+if exist "C:\\Program Files\\BellSoft\\LibericaJDK-25-Full\\bin\\java.exe" (
+    set "JAVA_EXE=C:\\Program Files\\BellSoft\\LibericaJDK-25-Full\\bin\\java.exe"
+)
+
+for %%I in ("%JAVA_EXE%") do set "JAVA_BIN_DIR=%%~dpI"
+if exist "%JAVA_BIN_DIR%..\\jmods" (
+    set "JMODS_DIR=%JAVA_BIN_DIR%..\\jmods"
+)
+if not defined JMODS_DIR if defined JAVA_HOME if exist "%JAVA_HOME%\\jmods" (
+    set "JMODS_DIR=%JAVA_HOME%\\jmods"
+)
+if not defined JMODS_DIR (
+    echo Nao foi possivel localizar a pasta jmods do JDK atual.
+    echo.
+    pause
+    exit /b 1
+)
+
+"%JAVA_EXE%" ^
+  --module-path "%JMODS_DIR%" ^
+  --add-modules javafx.controls,javafx.fxml,javafx.graphics,javafx.media,javafx.swing,javafx.web ^
+  --enable-native-access=ALL-UNNAMED ^
+  --enable-native-access=javafx.graphics ^
+  -Djava.library.path="%NATIVE_DIR%" ^
+  -cp "%APP_CP%" ^
+  com.shootoff.Main %*
+'''
+    }
+}
+
+tasks.register('modernDistZip', Zip) {
+    dependsOn('stageModernRuntime')
+    description = 'Create a zip for the modern staged runtime'
+    group = 'Package'
+    from(modernRuntimeDir)
+    archiveFileName.set("shootoff-${version}-modern.zip")
+    destinationDirectory.set(file("${buildDir}/dist"))
+}
+
+tasks.register('stageJpackageInput') {
+    dependsOn('stageModernRuntime')
+    description = 'Stage jpackage input files from the modern runtime'
+    group = 'Package'
+
+    doLast {
+        deleteDirectoryWithRetries(jpackageInputDir)
+
+        copy {
+            from(modernRuntimeDir)
+            into jpackageInputDir
+            exclude 'Run-ShootOFF.bat'
+            exclude 'log/**'
+            exclude 'sessions/**'
+        }
+    }
+}
+
+tasks.register('modernAppImage') {
+    dependsOn('stageJpackageInput')
+    description = 'Create a Windows app image for ShootOFF using jpackage'
+    group = 'Package'
+
+    doLast {
+        if (!jpackageExecutable.exists()) {
+            throw new GradleException("jpackage.exe was not found at ${jpackageExecutable}.")
+        }
+
+        if (!javafxJmodsDir.isDirectory()) {
+            throw new GradleException("JavaFX jmods directory was not found at ${javafxJmodsDir}.")
+        }
+
+        deleteDirectoryWithRetries(jpackageAppImageOutputDir)
+        deleteDirectoryWithRetries(jpackageTempDir)
+        jpackageAppImageOutputDir.mkdirs()
+        jpackageTempDir.mkdirs()
+
+        runExternalCommand([
+            jpackageExecutable.absolutePath,
+            '--type', 'app-image',
+            '--dest', jpackageAppImageOutputDir.absolutePath,
+            '--temp', jpackageTempDir.absolutePath,
+            '--input', jpackageInputDir.absolutePath,
+            '--name', 'ShootOFF',
+            '--app-version', installerVersion,
+            '--vendor', appVendor,
+            '--description', appDescription,
+            '--copyright', 'ShootOFF contributors',
+            '--icon', windowsIconFile.absolutePath,
+            '--main-jar', 'ShootOFF.jar',
+            '--main-class', mainClassName,
+            '--module-path', javafxJmodsDir.absolutePath,
+            '--add-modules', jpackageRuntimeModules.join(','),
+            '--java-options', "--add-modules=${jpackageRuntimeModules.join(',')}",
+            '--java-options', '--enable-native-access=ALL-UNNAMED',
+            '--java-options', '--enable-native-access=javafx.graphics',
+            '--java-options', "-Dshootoff.home=${appHomePlaceholder}",
+            '--java-options', "-Djava.library.path=${appHomePlaceholder};${appHomePlaceholder}\\native\\opencv",
+            '--java-options', "-Duser.dir=${appHomePlaceholder}",
+            '--verbose'
+        ], project.projectDir)
+    }
+}
+
+tasks.register('modernMsi') {
+    dependsOn('modernAppImage')
+    description = 'Create a Windows MSI installer for the modern ShootOFF runtime'
+    group = 'Package'
+
+    doLast {
+        if (!jpackageExecutable.exists()) {
+            throw new GradleException("jpackage.exe was not found at ${jpackageExecutable}.")
+        }
+
+        if (!jpackageAppImageDir.exists()) {
+            throw new GradleException("Expected app image at ${jpackageAppImageDir}, but it was not found.")
+        }
+
+        deleteDirectoryWithRetries(installerOutputDir)
+        deleteDirectoryWithRetries(jpackageTempDir)
+        installerOutputDir.mkdirs()
+        jpackageTempDir.mkdirs()
+
+        runExternalCommand([
+            jpackageExecutable.absolutePath,
+            '--type', 'msi',
+            '--dest', installerOutputDir.absolutePath,
+            '--temp', jpackageTempDir.absolutePath,
+            '--name', 'ShootOFF',
+            '--app-version', installerVersion,
+            '--vendor', appVendor,
+            '--description', appDescription,
+            '--about-url', 'https://github.com/phrack/ShootOFF',
+            '--copyright', 'ShootOFF contributors',
+            '--icon', windowsIconFile.absolutePath,
+            '--app-image', jpackageAppImageDir.absolutePath,
+            '--license-file', file('LICENSE').absolutePath,
+            '--install-dir', 'ShootOFF',
+            '--win-dir-chooser',
+            '--win-menu',
+            '--win-menu-group', 'ShootOFF',
+            '--win-per-user-install',
+            '--win-shortcut',
+            '--win-shortcut-prompt',
+            '--win-upgrade-uuid', winUpgradeUuid,
+            '--verbose'
+        ], project.projectDir)
+    }
+}
+
+test {
+    testLogging {
+        exceptionFormat = 'full'
+    }
+}
+
+task copyEyeCam(type:Copy) {
+    from 'eyeCam32.dll' into 'build/dist'
+    from 'eyeCam64.dll' into 'build/dist'
+}
+
+task copyConfig(type:Copy) {
+    from 'shootoff.properties' into 'build/dist'
+}
+
+task copyTargets(type:Copy) {
+    from 'targets' into 'build/dist/targets'
+}
+
+task copyCourses(type:Copy) {
+    from 'courses' into 'build/dist/courses'
+}
+
+task copySounds(type:Copy) {
+    from 'sounds' into 'build/dist/sounds'
+}
+
+task copyLibs(type:Copy) {
+    from({ configurations.runtimeClasspath })
+    into libTempDir
+    exclude "*jfxrt.jar"
+    exclude "*java2html.jar"
+    exclude "*junit*.jar"
+    exclude "*slf4j-log4j12*.jar"
+    exclude "*freetts-de*.jar"
+}
+
+// JWS is picky about whether or not it will access classes from non-trusted JARs,
+// thus mark all dependencies as trusted
+task updateJars() {
+    doLast {
+        FileCollection jars = files { file(libTempDir).listFiles() }
+
+        jars.each {File jar ->
+            ant.jar(update: "true", destfile: "${jar.path}/") {
+                delegate.manifest {
+                    attribute(name: 'Trusted-Library', value: 'true')
+                }
+            }
+        }
+    }
+}
+
+task fxJar(dependsOn: build) {
+    dependsOn('copyConfig')
+    dependsOn('copyTargets')
+    dependsOn('copyCourses')
+    dependsOn('copySounds')
+    dependsOn('copyLibs')
+    dependsOn('copyEyeCam')
+
+    description = 'Create a runnable jar for ShootOFF'
+    group = 'Package'
+
+    inputs.files sourceSets.main.output
+    outputs.file archivePath
+
+    onlyIf { hasLegacyJavafxAnt }
+
+    doLast {
+        configureLegacyAntFx()
+
+        def antfx = NamespaceBuilder.newInstance(
+                ant,
+                'javafx:com.sun.javafx.tools.ant')
+
+        antfx.application(
+                id: project.name,
+                name: project.name,
+                mainClass: mainClassName)
+
+        antfx.jar(destfile: archivePath) {
+            application(refid: project.name)
+            sourceSets.main.output.classesDirs.files.each { classDir ->
+                fileset(dir: classDir)
+            }
+            if (sourceSets.main.output.resourcesDir != null) {
+                fileset(dir: sourceSets.main.output.resourcesDir)
+            }
+            antfx.resources() {
+                fileset(dir: 'build/dist/', includes: 'libs/*.jar')
+            }
+            delegate.manifest {
+                attribute(name: 'Codebase', value: '*')
+                attribute(name: 'Permissions', value: 'all-permissions')
+                attribute(name: 'Trusted-Library', value: 'true')
+                attribute(name: 'Application-Name', value: 'ShootOFF')
+                attribute(name: 'Created-By', value: 'ShootOFF')
+            }
+        }
+    }
+}
+
+// THIS IS USED BY THE CI SERVER TO CREATE THE ZIP UPLOADED TO THE
+// NIGHTLIES SERVER. DO NOT RENAME THIS WITHOUT ALSO UPDATING THE
+// TRAVIS-CI CONFIGURATION!
+task zipRelease(type: Zip) {
+    dependsOn('fxJar')
+
+    description = 'Creates the release zip file (sans the diagnostic tool)'
+    group = 'Release'
+
+    from(file(dist)) {
+        include 'targets/**'
+        include 'sounds/**'
+        include 'courses/**'
+        include 'libs/**/*.jar'
+        include 'shootoff.properties'
+        include 'ShootOFF.jar'
+        include 'eyeCam32.dll'
+        include 'eyeCam64.dll'
+    }
+
+    archiveFileName.set(releaseZip)
+    destinationDirectory.set(file(dist))
+}
+
+task getDiagnosticJar() {
+	doFirst
+	{
+	    def diagnosticTool = new File(dist + diagnosticsJar)
+	    if (!diagnosticTool.exists()) {
+
+	        if (username == '' && password == '') {
+	            username = System.console().readLine('\nPlease enter GitHub username: ')
+	            password = System.console().readPassword('Please enter GitHub password: ')
+	            password = new String(password)
+	        }
+
+	        gh = GitHub.connectUsingPassword(username, password)
+
+	        if (!gh.isCredentialValid()) {
+	            throw new InvalidUserDataException('Incorrect GitHub credentials')
+	        }
+
+
+	        def ghDiagRepo = gh.getRepository('phrack/ShootOFF-diagnostics')
+	        def diagReleases = ghDiagRepo.listReleases().asList()
+
+	        def newestRelease = diagReleases.get(0)
+
+	        for (release in diagReleases.subList(1, diagReleases.size())) {
+	            if (!release.isDraft() && !release.isPrerelease()) {
+	                if (release.getTagName() > newestRelease.getTagName()) {
+	                    newestRelease = release
+	                }
+	            }
+	        }
+
+	        new URL(newestRelease.getAssets().get(0).getBrowserDownloadUrl())
+	            .withInputStream{ i -> diagnosticTool.withOutputStream{ it << i }}
+	       }
+      }
+}
+
+// 1. Add latest version of diagnostic tool to release zip
+// 2. Create release on GH and upload the zip
+// 3. Upload the xml file that contains version metadata to let users know a new version is out
+task pushZipRelease(dependsOn: zipRelease) {
+    description = 'Add diagnostic tool to release zip, create GitHub release and upload ' +
+		'the zip, and update and commit new version metadata to gh-pages'
+    group = 'Release'
+
+    dependsOn(getDiagnosticJar)
+
+    doLast{
+        if (username == '' && password == '') {
+            username = System.console().readLine('\nPlease enter GitHub username: ')
+            password = System.console().readPassword('Please enter GitHub password: ')
+            password = new String(password)
+        }
+
+        if (!gh) gh = GitHub.connectUsingPassword(username, password)
+
+        if (!gh.isCredentialValid()) {
+            throw new InvalidUserDataException('Incorrect GitHub credentials')
+        }
+
+
+        ant.zip(update: "true",
+                basedir: "${dist}",
+                destfile: "${dist}/${releaseZip}",
+                includes: "${diagnosticsJar}"
+               )
+
+        // Create GitHub release
+
+        def ghMainRepo = gh.getRepository('phrack/ShootOFF-NG')
+        def repoReleaseBuilder = ghMainRepo.createRelease('v' + version + '-FINAL')
+        repoReleaseBuilder.body('1. Download ' + releaseZip + ' and extract it.\n' +
+                            '2. Double click ShootOFF.jar.')
+        repoReleaseBuilder.draft(true)
+        repoReleaseBuilder.commitish('master')
+        repoReleaseBuilder.name('shootoff-' + version + '-final')
+        def repoRelease = repoReleaseBuilder.create()
+        repoRelease.uploadAsset(new File(dist + releaseZip), 'application/zip')
+
+
+        // Upload MSI if it exists
+        def msiFile = new File(bundleDir + 'bundles/' + releaseMsi)
+        if (msiFile.exists())
+        {
+        	repoRelease.uploadAsset(msiFile, 'application/msi')
+        }
+
+        // Update version metadata
+
+        grgit = Grgit.open('.', new Credentials(username: username, password: password))
+        grgit.checkout(branch: 'gh-pages', createBranch: false)
+
+        def versionMetadata = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n' +
+            '<stableRelease version=\"' + version + '\" ' +
+            'download=\"https://github.com/phrack/ShootOFF/releases/download/v' + version +
+                '-FINAL/' + releaseZip + '\" />'
+
+        def versionFile = new File('shootoff-version.xml')
+        versionFile.write(versionMetadata, 'UTF-8')
+
+        grgit.commit(message: 'Update version file to ' + version, all: true)
+        grgit.push()
+
+        grgit.checkout(branch: 'master', createBranch: false)
+        grgit.close()
+    }
+}
+
+task fxSignedJar(dependsOn: fxJar) {
+    description = 'Digitally sign ShootOFF.jar (generated by fxJar task)'
+    group = 'Package'
+    onlyIf { hasLegacyJavafxAnt }
+
+    doFirst {
+        assert file(keyStore).exists()
+    }
+
+    doLast {
+        def keyPassword = System.console().readPassword("\nPlease enter key passphrase: ")
+        keyPassword = new String(keyPassword)
+
+        ant.signjar(
+                jar: archivePath,
+                keystore: keyStore,
+                storepass: keyPassword,
+                alias: keyAlias,
+                tsaurl: tsaURL
+        )
+    }
+}
+
+task fxJarWritableResources() {
+    onlyIf { hasLegacyJavafxAnt }
+
+    doLast {
+        def antfx = NamespaceBuilder.newInstance(
+                ant,
+                'javafx:com.sun.javafx.tools.ant')
+
+        ant.jar(destfile: webstartDir + writableResources) {
+            fileset(dir: 'build/dist/', includes: 'courses/**')
+            fileset(dir: 'build/dist/', includes: 'targets/**')
+            fileset(dir: 'build/dist/', includes: 'sounds/**')
+            fileset(dir: 'build/dist/', includes: 'shootoff.properties')
+
+            delegate.manifest {
+                attribute(name: 'Trusted-Library', value: 'true')
+            }
+        }
+    }
+}
+
+task msiRelease() {
+    group = 'Release'
+    onlyIf { hasLegacyJavafxAnt }
+
+    dependsOn(fxJar)
+    dependsOn('updateJars')
+    dependsOn(getDiagnosticJar)
+
+    doLast {
+        configureLegacyAntFx()
+
+        def antfx = NamespaceBuilder.newInstance(
+                ant,
+                'javafx:com.sun.javafx.tools.ant')
+
+        antfx.deploy(
+        		verbose: true,
+                outdir: bundleDir,
+                outfile: 'ShootOFF',
+                offlineAllowed: true,
+                nativeBundles: 'msi',
+        ) {
+            antfx.application(
+                mainClass: mainClassName,
+                name: 'ShootOFF',
+                toolkit: 'fx',
+                version: version
+            )
+
+            antfx.preferences(
+            	install: false,
+            	menu: true,
+            	shortcut: true
+            )
+
+            antfx.platform(
+                javafx: '8.0+',
+                j2se: '1.8+',
+            )
+
+            antfx.info(
+                title: project.name,
+                vendor: "ShootOFF",
+                description: 'A virtual shooting range to enhance laser dry fire training'
+            ) {
+                antfx.icon(
+                    kind: 'default',
+                    href: 'windows_icon.ico',
+                    width: '256',
+                    height: '256'
+                )
+            }
+
+            antfx.resources {
+                antfx.fileset(
+                    dir: 'build/dist/',
+                    includes: 'ShootOFF.jar'
+                )
+
+                antfx.fileset(
+                    dir: '',
+                    includes: 'shootoff.properties'
+                )
+
+                antfx.fileset(
+                	dir: 'build/dist/',
+                	includes: diagnosticsJar
+                )
+
+                antfx.fileset(
+                    dir: '',
+                    includes: 'LICENSE'
+                )
+
+                antfx.fileset(
+                    dir: '',
+        			includes: 'targets/**',
+                )
+
+                antfx.fileset(
+                    dir: '',
+        			includes: 'courses/**',
+                )
+
+                antfx.fileset(
+                    dir: '',
+       			 	includes: 'sounds/**',
+                )
+                antfx.fileset(
+                    dir: 'build/dist/',
+                    includes: 'libs/*.jar'
+                )
+
+
+                antfx.fileset(
+                    type: 'icon',
+                    dir: 'src/main/resources/images/',
+                    includes: 'windows_icon.ico'
+                )
+            }
+        }
+    }
+}
+
+
+task fxWebstartSignedJar() {
+    dependsOn(fxJar)
+    dependsOn('updateJars')
+    dependsOn(fxJarWritableResources)
+    onlyIf { hasLegacyJavafxAnt }
+
+    doFirst {
+        assert file(keyStore).exists()
+    }
+
+    doLast {
+        def keyPassword = System.console().readPassword("\nPlease enter key passphrase: ")
+        keyPassword = new String(keyPassword)
+
+        ant.signjar(
+            keystore: keyStore,
+            storepass: keyPassword,
+            alias: keyAlias,
+            tsaurl: tsaURL
+        ) {
+                ant.fileset(
+                    dir: 'build/dist/',
+                    includes: '*.jar'
+                )
+        }
+
+        def path = ant.path {
+                ant.fileset(
+                    dir: 'build/dist/',
+                    includes: 'libs/*.jar',
+                )
+        }
+
+        GParsPool.withPool {
+            path.list().eachParallel { f ->
+                def antLocal = project.createAntBuilder()
+                antLocal.signjar(
+                        jar: f,
+                        keystore: keyStore,
+                        storepass: keyPassword,
+                        alias: keyAlias,
+                        tsaurl: tsaURL
+                )
+            }
+        }
+    }
+}
+
+task fxRelease(dependsOn: fxWebstartSignedJar) {
+    onlyIf { hasLegacyJavafxAnt }
+
+    doLast {
+        configureLegacyAntFx()
+
+        def antfx = NamespaceBuilder.newInstance(
+                ant,
+                'javafx:com.sun.javafx.tools.ant')
+
+        antfx.deploy(
+                codebase: "http://shootoffapp.com/jws/",
+                outdir: webstartDir,
+                outfile: project.name,
+        ) {
+            antfx.application(
+                mainClass: mainClassName,
+                name: 'ShootOFF',
+                toolkit: 'fx',
+                version: version
+            )
+
+            antfx.platform(
+                javafx: '8.0+',
+                j2se: '1.8+'
+            )
+
+            antfx.info(
+                title: project.name,
+                vendor: project.name,
+                license: license,
+                description: 'A virtual shooting range to enhance laser dry fire training.'
+            ) {
+                antfx.icon(
+                    kind: 'shortcut',
+                    href: 'icon_32x32.png',
+                    width: '32',
+                    height: '32'
+                )
+            }
+
+            antfx.permissions(
+                elevated: true,
+                cachecertificates: true
+            )
+
+            antfx.preferences(
+                shortcut: true,
+                install: false,
+                menu: false
+            )
+
+            antfx.resources {
+                antfx.fileset(
+                    dir: 'build/dist/',
+                    includes: 'ShootOFF.jar'
+                )
+
+                antfx.fileset(
+                    dir: 'build/dist/',
+                    includes: 'libs/*.jar'
+                )
+
+                antfx.fileset(
+                    type: 'icon',
+                    dir: 'src/main/resources/images/',
+                    includes: 'icon_32x32.png'
+                )
+            }
+        }
+
+        def jnlpPath = webstartDir + project.name + '.jnlp'
+        String contents = new File(jnlpPath).getText('UTF-8')
+
+        // Can't update HREF in jnlp tag with antfx
+        contents = contents.replace('href=\"ShootOFF.jnlp\">',
+            'href=\"http://shootoffapp.com/jws/ShootOFF.jnlp\">')
+
+        // antfx.icon is not working for jnlp
+        contents = contents.replace('<offline-allowed/>',
+            '<icon href=\"icon_32x32.png\" width=\"32\" height=\"32\" />\n    <offline-allowed/>')
+
+        new File(jnlpPath).write(contents, 'UTF-8')
+    }
+}
+
+task copyJWSLibs(type: Copy) {
+    from webstartDir + 'libs'
+    into jwsDir + 'libs'
+}
+
+task copyJWSConfig(type: Copy) {
+    from webstartDir + writableResources
+    from webstartDir + project.name + '.jnlp'
+    from webstartDir + 'ShootOFF.jar'
+    into jwsDir
+}
+
+task pushFxRelease(dependsOn: fxRelease) {
+    description = 'Replace old JNLP artifacts with new ones in gh-pages'
+    group = 'Release'
+    onlyIf { hasLegacyJavafxAnt }
+
+    doLast {
+        if (username == '' && password == '') {
+            username = System.console().readLine('\nPlease enter GitHub username: ')
+            password = System.console().readPassword('Please enter GitHub password: ')
+            password = new String(password)
+        }
+
+        grgit = Grgit.open('.', new Credentials(username: username, password: password))
+        grgit.checkout(branch: 'gh-pages', createBranch: false)
+
+        delete jwsDir + 'libs'
+        copyJWSLibs.execute()
+        copyJWSConfig.execute()
+
+        grgit.add(patterns: [jwsDir + 'libs'])
+
+        def resourcesArchive = new File(jwsDir + writableResources)
+
+        def resourcesMetadata = '<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n' +
+            '<resources version=\"' + version + '\" ' +
+            'fileSize=\"' + resourcesArchive.length() + '\" />'
+
+        def resourcesFile = new File(jwsDir + writableResourcesMetadata)
+        resourcesFile.write(resourcesMetadata, 'UTF-8')
+
+        grgit.commit(message: 'Update JWS to ' + version, all: true)
+        grgit.push()
+
+        grgit.checkout(branch: 'master', createBranch: false)
+        grgit.close()
+    }
+}
+
+task release() {
+    description = 'Perform all automated tasks to release a new version of ShootOFF and print ' +
+                'todo list for remaining tasks'
+    group = 'Release'
+
+    if (hasLegacyJavafxAnt) {
+        dependsOn(pushZipRelease)
+        dependsOn(pushFxRelease)
+    }
+}
+
+task releaseWithMsi() {
+    description = 'Perform all automated tasks to release a new version of ShootOFF and print ' +
+                'todo list for remaining tasks'
+    group = 'Release'
+
+    if (hasLegacyJavafxAnt) {
+        dependsOn(msiRelease)
+        dependsOn(pushZipRelease)
+        dependsOn(pushFxRelease)
+    }
+}
+
+release.doLast {
+    // Some of these are worth trying to automate later!
+    print("-----------------------------------------\n" +
+          "REMAINING RELEASE TASKS\n" +
+          "-----------------------------------------\n\n" +
+          "- Publish release draft\n" +
+          "- Update website\n" +
+          "- Make Reddit release post\n" +
+          "- Make Twitter release post\n" +
+          "- Make release email")
+}
