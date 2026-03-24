@@ -21,6 +21,10 @@ package com.shootoff.gui;
 public interface CalibrationConfigurator {
 	CalibrationOption getCalibratedFeedBehavior();
 
+	default CalibrationMode getCalibrationMode() {
+		return CalibrationMode.AUTO_GREEN;
+	}
+
 	void calibratedFeedBehaviorsChanged();
 
 	void toggleCalibrating(boolean isCalibrating);

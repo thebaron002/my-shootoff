@@ -590,9 +590,9 @@ public class Main extends Application {
 			final Scene scene = new Scene(loader.getRoot());
 
 			if (version.isPresent())
-				primaryStage.setTitle("ShootOFF " + version.get());
+				primaryStage.setTitle(AppBranding.getVersionedAppName(version.get()));
 			else
-				primaryStage.setTitle("ShootOFF");
+				primaryStage.setTitle(AppBranding.getAppName());
 			primaryStage.setScene(scene);
 			final ShootOFFController controller = (ShootOFFController) loader.getController();
 			controller.init(config);

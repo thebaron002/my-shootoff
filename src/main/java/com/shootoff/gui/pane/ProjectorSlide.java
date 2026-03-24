@@ -18,14 +18,21 @@
 
 package com.shootoff.gui.pane;
 
+import java.io.IOException;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.shootoff.AppBranding;
 import com.shootoff.camera.CameraManager;
+import com.shootoff.config.ConfigurationException;
 import com.shootoff.camera.perspective.PerspectiveManager;
 import com.shootoff.config.Configuration;
 import com.shootoff.gui.CalibrationConfigurator;
 import com.shootoff.gui.CalibrationListener;
 import com.shootoff.gui.CalibrationManager;
+import com.shootoff.gui.CalibrationMode;
 import com.shootoff.gui.CalibrationOption;
 import com.shootoff.gui.CanvasManager;
 import com.shootoff.gui.MirroredCanvasManager;
@@ -35,11 +42,15 @@ import com.shootoff.targets.CameraViews;
 
 import javafx.application.Platform;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
+import javafx.scene.control.RadioMenuItem;
+import javafx.scene.control.SplitMenuButton;
+import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
 
 public class ProjectorSlide extends Slide implements CalibrationConfigurator {
+	private static final Logger logger = LoggerFactory.getLogger(ProjectorSlide.class);
+
 	private final Pane parentControls;
 	private final Pane parentBody;
 	private final Configuration config;
@@ -48,7 +59,9 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 	private final Pane trainingExerciseContainer;
 	private final Resetter resetter;
 	private final ExerciseSlide exerciseSlide;
-	private final Button calibrateButton;
+	private final SplitMenuButton calibrateButton;
+	private final RadioMenuItem autoGreenCalibrationItem;
+	private final RadioMenuItem manualCalibrationItem;
 
 	private ArenaBackgroundsSlide backgroundsSlide;
 
@@ -68,7 +81,9 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 		this.resetter = resetter;
 		this.exerciseSlide = exerciseSlide;
 
-		calibrateButton = addSlideControlButton("Calibrate", (event) -> {
+		calibrateButton = addSlideControlNode(new SplitMenuButton());
+		calibrateButton.setWrapText(true);
+		calibrateButton.setOnAction((event) -> {
 			if (!calibrationManager.isPresent()) return;
 
 			final CalibrationManager calibrator = calibrationManager.get();
@@ -79,6 +94,15 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 				calibrator.stopCalibration();
 			}
 		});
+		final ToggleGroup calibrationModeToggle = new ToggleGroup();
+		autoGreenCalibrationItem = new RadioMenuItem(CalibrationMode.AUTO_GREEN.getDisplayName());
+		autoGreenCalibrationItem.setToggleGroup(calibrationModeToggle);
+		autoGreenCalibrationItem.setOnAction((event) -> setCalibrationMode(CalibrationMode.AUTO_GREEN, true));
+		manualCalibrationItem = new RadioMenuItem(CalibrationMode.MANUAL.getDisplayName());
+		manualCalibrationItem.setToggleGroup(calibrationModeToggle);
+		manualCalibrationItem.setOnAction((event) -> setCalibrationMode(CalibrationMode.MANUAL, true));
+		calibrateButton.getItems().addAll(autoGreenCalibrationItem, manualCalibrationItem);
+		setCalibrationMode(config.getCalibrationMode(), false);
 
 		addSlideControlButton("Background", (event) -> {
 			backgroundsSlide.showControls();
@@ -104,6 +128,11 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 	}
 
 	@Override
+	public CalibrationMode getCalibrationMode() {
+		return config.getCalibrationMode();
+	}
+
+	@Override
 	public void calibratedFeedBehaviorsChanged() {
 		if (calibrationManager.isPresent())
 			calibrationManager.get().configureArenaCamera(config.getCalibratedFeedBehavior());
@@ -113,12 +142,7 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 
 	@Override
 	public void toggleCalibrating(boolean isCalibrating) {
-		final Runnable toggleCalibrationAction = () -> {
-			if (isCalibrating)
-				calibrateButton.setText("Stop Calibrating");
-			else
-				calibrateButton.setText("Calibrate");
-		};
+		final Runnable toggleCalibrationAction = () -> updateCalibrationButtonText(isCalibrating);
 
 		if (Platform.isFxApplicationThread()) {
 			toggleCalibrationAction.run();
@@ -133,6 +157,36 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 
 	public Optional<CalibrationManager> getCalibrationManager() {
 		return calibrationManager;
+	}
+
+	private void setCalibrationMode(CalibrationMode calibrationMode, boolean persist) {
+		config.setCalibrationMode(calibrationMode);
+
+		if (CalibrationMode.AUTO_GREEN.equals(calibrationMode)) {
+			autoGreenCalibrationItem.setSelected(true);
+		} else {
+			manualCalibrationItem.setSelected(true);
+		}
+
+		updateCalibrationButtonText(calibrationManager.isPresent() && calibrationManager.get().isCalibrating());
+
+		if (persist) persistCalibrationMode();
+	}
+
+	private void persistCalibrationMode() {
+		try {
+			config.writeConfigurationFile();
+		} catch (ConfigurationException | IOException e) {
+			logger.warn("Failed to persist calibration mode preference", e);
+		}
+	}
+
+	private void updateCalibrationButtonText(boolean isCalibrating) {
+		if (isCalibrating) {
+			calibrateButton.setText("Stop\nCalibration");
+		} else {
+			calibrateButton.setText(String.format("Calibrate\n%s", config.getCalibrationMode().getDisplayName()));
+		}
 	}
 
 	public void startArena() {
@@ -188,7 +242,7 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 		tabCanvasManager.setCameraManager(calibratingCameraManager);
 
 		// Final preparation to display
-		arenaStage.setTitle("Projector Arena");
+		arenaStage.setTitle(AppBranding.getArenaName());
 		arenaStage.setScene(new Scene(arenaPane));
 		arenaStage.setFullScreenExitHint("");
 

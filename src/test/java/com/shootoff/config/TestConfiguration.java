@@ -5,6 +5,8 @@ import static org.junit.Assert.*;
 import java.io.File;
 import java.io.IOException;
 
+import com.shootoff.gui.CalibrationMode;
+
 import javafx.scene.paint.Color;
 
 import org.junit.Before;
@@ -31,6 +33,7 @@ public class TestConfiguration {
 		assertTrue(defaultConfig.useErrorReporting());
 		assertEquals(0, defaultConfig.getWebcams().size());
 		assertEquals(4, defaultConfig.getMarkerRadius());
+		assertEquals(CalibrationMode.AUTO_GREEN, defaultConfig.getCalibrationMode());
 		assertEquals(false, defaultConfig.ignoreLaserColor());
 		assertEquals("None", defaultConfig.getIgnoreLaserColorName());
 		assertEquals(false, defaultConfig.useRedLaserSound());
@@ -284,6 +287,7 @@ public class TestConfiguration {
 		writtenConfig.unmuteMessageChime("good message");
 		writtenConfig.setCameraDistance("Camera1", 100);
 		writtenConfig.setCameraDistance("Camera2", 509);
+		writtenConfig.setCalibrationMode(CalibrationMode.MANUAL);
 
 		writtenConfig.writeConfigurationFile();
 
@@ -295,6 +299,7 @@ public class TestConfiguration {
 		assertEquals(writtenConfig.useVirtualMagazine(), readConfig.useVirtualMagazine());
 		assertEquals(25, writtenConfig.getVirtualMagazineCapacity());
 		assertEquals(writtenConfig.getVirtualMagazineCapacity(), readConfig.getVirtualMagazineCapacity());
+		assertEquals(CalibrationMode.MANUAL, readConfig.getCalibrationMode());
 		assertEquals(writtenConfig.useMalfunctions(), readConfig.useMalfunctions());
 		assertEquals(43.15f, writtenConfig.getMalfunctionsProbability(), 0.5f);
 		assertTrue(readConfig.isChimeMuted("annoying message"));

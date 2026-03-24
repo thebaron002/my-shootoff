@@ -20,8 +20,10 @@ package com.shootoff.gui;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,12 +50,16 @@ import javafx.geometry.Bounds;
 import javafx.geometry.Dimension2D;
 import javafx.scene.Group;
 import javafx.scene.control.Label;
+import javafx.scene.image.PixelWriter;
+import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import javafx.stage.WindowEvent;
 
 public class CalibrationManager implements CameraCalibrationListener {
 	private static final int MAX_AUTO_CALIBRATION_TIME = 12 * 1000;
 	private static final int MAX_AUTO_CALIBRATION_TIME_HEADLESS = 45 * 1000;
+	private static final String AUTO_GREEN_BACKGROUND = "__auto_green_background__";
+	private static final int GENERATED_BACKGROUND_SIZE = 64;
 	private static final Logger logger = LoggerFactory.getLogger(CalibrationManager.class);
 
 	private final CalibrationConfigurator calibrationConfigurator;
@@ -64,6 +70,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 	private final Optional<AutocalibrationListener> autocalibrationListener;
 	private final ExerciseListener exerciseListener;
 	private final List<CalibrationListener> calibrationListeners = new ArrayList<>();
+	private final Map<CalibrationMode, CalibrationStrategy> calibrationStrategies = new EnumMap<>(CalibrationMode.class);
 	private final ProjectorArenaPane arenaPane;
 
 	private ScheduledFuture<?> autoCalibrationFuture = null;
@@ -88,6 +95,8 @@ public class CalibrationManager implements CameraCalibrationListener {
 		config = Configuration.getConfig();
 		this.autocalibrationListener = Optional.ofNullable(autocalibrationListener);
 		this.exerciseListener = exerciseListener;
+		calibrationStrategies.put(CalibrationMode.MANUAL, new ManualCalibrationStrategy());
+		calibrationStrategies.put(CalibrationMode.AUTO_GREEN, new GreenScreenCalibrationStrategy());
 
 		arenaPane.setFeedCanvasManager(calibratingCanvasManager);
 		calibratingCameraManager.setCalibrationManager(this);
@@ -124,7 +133,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 		calibratingCameraManager.setProjectionBounds(null);
 
 		if (arenaPane.isFullScreen()) {
-			enableAutoCalibration();
+			enableConfiguredCalibration();
 		} else {
 			showFullScreenRequest();
 		}
@@ -253,13 +262,19 @@ public class CalibrationManager implements CameraCalibrationListener {
 		calibratingCameraManager.setProjectionBounds(translatedToCameraBounds);
 	}
 
-	private void enableManualCalibration() {
+	void beginManualCalibration() {
 		logger.trace("enableManualCalibration");
 
 		final int DEFAULT_DIM = 75;
 		final int DEFAULT_POS = 150;
 
 		removeAutoCalibrationMessage();
+		calibratingCameraManager.disableAutoCalibration();
+
+		if (isShowingPattern.get()) {
+			arenaPane.restoreCurrentBackground();
+			isShowingPattern.set(false);
+		}
 
 		originalView = Optional.of(cameraViews.getSelectedCameraView());
 		cameraViews.selectCameraView(calibratingCanvasManager);
@@ -322,8 +337,10 @@ public class CalibrationManager implements CameraCalibrationListener {
 		}
 	}
 
-	private void enableAutoCalibration() {
-		logger.trace("enableAutoCalibration");
+	void beginAutoGreenCalibration() {
+		logger.trace("beginAutoGreenCalibration");
+
+		disableManualCalibration();
 
 		for (final CalibrationListener c : calibrationListeners)
 			c.startCalibration();
@@ -332,14 +349,23 @@ public class CalibrationManager implements CameraCalibrationListener {
 		// to another screen while calibrating. If we save the background in
 		// that case we are saving the calibration pattern as the background.
 		if (!isShowingPattern.get()) arenaPane.saveCurrentBackground();
-		setArenaBackground("pattern.png");
+		setArenaBackground(AUTO_GREEN_BACKGROUND);
 		isShowingPattern.set(true);
 
-		calibratingCameraManager.enableAutoCalibration(false);
+		calibratingCameraManager.enableAutoCalibration(CalibrationMode.AUTO_GREEN, false);
 
 		showAutoCalibrationMessage();
 
 		launchAutoCalibrationTimer();
+	}
+
+	private void enableConfiguredCalibration() {
+		final CalibrationStrategy calibrationStrategy = calibrationStrategies.get(calibrationConfigurator.getCalibrationMode());
+		if (calibrationStrategy != null) {
+			calibrationStrategy.start(this);
+		} else {
+			beginManualCalibration();
+		}
 	}
 
 	private void launchAutoCalibrationTimer() {
@@ -353,7 +379,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 						stopCalibration();
 					} else {
 						calibratingCameraManager.disableAutoCalibration();
-						enableManualCalibration();
+						beginManualCalibration();
 					}
 				}
 				// Keep waiting
@@ -365,12 +391,32 @@ public class CalibrationManager implements CameraCalibrationListener {
 	@Override
 	public void setArenaBackground(String resourceFilename) {
 		if (resourceFilename != null) {
-			final InputStream is = this.getClass().getClassLoader().getResourceAsStream(resourceFilename);
-			final LocatedImage img = new LocatedImage(is, resourceFilename);
+			final LocatedImage img;
+
+			if (AUTO_GREEN_BACKGROUND.equals(resourceFilename)) {
+				img = createSolidBackground(resourceFilename, Color.web("#00ff41"));
+			} else {
+				final InputStream is = this.getClass().getClassLoader().getResourceAsStream(resourceFilename);
+				img = new LocatedImage(is, resourceFilename);
+			}
+
 			arenaPane.setArenaBackground(img);
 		} else {
 			arenaPane.setArenaBackground(null);
 		}
+	}
+
+	private LocatedImage createSolidBackground(String imageName, Color color) {
+		final WritableImage image = new WritableImage(GENERATED_BACKGROUND_SIZE, GENERATED_BACKGROUND_SIZE);
+		final PixelWriter pixelWriter = image.getPixelWriter();
+
+		for (int x = 0; x < GENERATED_BACKGROUND_SIZE; x++) {
+			for (int y = 0; y < GENERATED_BACKGROUND_SIZE; y++) {
+				pixelWriter.setColor(x, y, color);
+			}
+		}
+
+		return new LocatedImage(image, imageName, false);
 	}
 
 	private Label autoCalibrationMessage = null;
@@ -383,8 +429,10 @@ public class CalibrationManager implements CameraCalibrationListener {
 		if (showingAutoCalibrationMessage) return;
 
 		showingAutoCalibrationMessage = true;
-		autoCalibrationMessage = calibratingCanvasManager.addDiagnosticMessage("Attempting autocalibration", 11000,
-				Color.CYAN);
+		final String message = CalibrationMode.AUTO_GREEN.equals(calibrationConfigurator.getCalibrationMode())
+				? "Attempting green autocalibration"
+				: "Attempting autocalibration";
+		autoCalibrationMessage = calibratingCanvasManager.addDiagnosticMessage(message, 11000, Color.CYAN);
 	}
 
 	private void removeAutoCalibrationMessage() {
@@ -424,7 +472,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 			// Delay slightly to prevent #444 bug
 			TimerPool.schedule(() -> {
 				Platform.runLater(() -> {
-					if (isCalibrating.get()) enableAutoCalibration();
+					if (isCalibrating.get()) enableConfiguredCalibration();
 				});
 			}, 100);
 		}

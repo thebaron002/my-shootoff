@@ -29,6 +29,7 @@ import javafx.scene.control.Button;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
 
 public abstract class Slide {
 	// We set a maximum on the number of control buttons at the top
@@ -109,16 +110,22 @@ public abstract class Slide {
 	// of the slide. These are intended to control the content
 	// that appears on the rest of the slide
 	protected Button addSlideControlButton(String text, final EventHandler<ActionEvent> eventHandler) {
+		final Button controlButton = new Button(text);
+		controlButton.setOnAction(eventHandler);
+		return addSlideControlNode(controlButton);
+	}
+
+	protected <T extends Node> T addSlideControlNode(T node) {
 		if (controlNodes.size() >= MAX_CONTROL_BUTTONS) {
 			throw new AssertionError("The slide already has the maximum number of control buttons");
 		}
 
-		final Button controlButton = new Button(text);
-		controlButton.setPrefSize(CONTROL_BUTTON_WIDTH, CONTROL_BUTTON_HEIGHT);
-		controlButton.setOnAction(eventHandler);
-		controlNodes.add(controlButton);
+		if (node instanceof Region) {
+			((Region) node).setPrefSize(CONTROL_BUTTON_WIDTH, CONTROL_BUTTON_HEIGHT);
+		}
 
-		return controlButton;
+		controlNodes.add(node);
+		return node;
 	}
 
 	protected void addBodyNode(Node node) {

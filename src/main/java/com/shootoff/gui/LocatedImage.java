@@ -18,8 +18,14 @@
 
 package com.shootoff.gui;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 
+import javax.imageio.ImageIO;
+
+import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 
 public class LocatedImage extends Image {
@@ -36,6 +42,22 @@ public class LocatedImage extends Image {
 		super(is);
 		url = resourceName;
 		isResource = true;
+	}
+
+	public LocatedImage(Image image, String imageName, boolean isResource) {
+		super(toInputStream(image));
+		url = imageName;
+		this.isResource = isResource;
+	}
+
+	private static InputStream toInputStream(Image image) {
+		try {
+			final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+			ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", outputStream);
+			return new ByteArrayInputStream(outputStream.toByteArray());
+		} catch (IOException e) {
+			throw new IllegalStateException("Failed to convert JavaFX image to byte stream", e);
+		}
 	}
 
 	public String getURL() {

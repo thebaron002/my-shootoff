@@ -36,6 +36,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.shootoff.AppBranding;
 import com.shootoff.camera.CameraErrorView;
 import com.shootoff.camera.CameraFactory;
 import com.shootoff.camera.CameraManager;
@@ -50,6 +51,7 @@ import com.shootoff.courses.io.CourseIO;
 import com.shootoff.gui.AutocalibrationListener;
 import com.shootoff.gui.CalibrationConfigurator;
 import com.shootoff.gui.CalibrationManager;
+import com.shootoff.gui.CalibrationMode;
 import com.shootoff.gui.CalibrationOption;
 import com.shootoff.gui.CanvasManager;
 import com.shootoff.gui.ExerciseListener;
@@ -178,7 +180,7 @@ public class HeadlessController implements AutocalibrationListener, CameraErrorV
 		arenaPane = new ProjectorArenaPane(arenaStage, null, trainingExerciseContainer, this, shotEntries);
 		arenaCanvasManager = arenaPane.getCanvasManager();
 
-		arenaStage.setTitle("Projector Arena");
+		arenaStage.setTitle(AppBranding.getArenaName());
 		arenaStage.setScene(new Scene(arenaPane));
 		arenaStage.setFullScreenExitHint("");
 
@@ -408,6 +410,11 @@ public class HeadlessController implements AutocalibrationListener, CameraErrorV
 	@Override
 	public CalibrationOption getCalibratedFeedBehavior() {
 		return CalibrationOption.ONLY_IN_BOUNDS;
+	}
+
+	@Override
+	public CalibrationMode getCalibrationMode() {
+		return CalibrationMode.AUTO_GREEN;
 	}
 
 	@Override

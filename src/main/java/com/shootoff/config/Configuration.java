@@ -56,6 +56,7 @@ import com.shootoff.camera.cameratypes.IpCamera;
 import com.shootoff.camera.processors.MalfunctionsProcessor;
 import com.shootoff.camera.processors.ShotProcessor;
 import com.shootoff.camera.processors.VirtualMagazineProcessor;
+import com.shootoff.gui.CalibrationMode;
 import com.shootoff.gui.CalibrationOption;
 import com.shootoff.gui.controller.VideoPlayerController;
 import com.shootoff.plugins.TrainingExercise;
@@ -102,6 +103,7 @@ public class Configuration {
 	private static final String MUTED_CHIME_MESSAGES = "shootoff.diagnosticmessages.chime.muted";
 	private static final String PERSPECTIVE_WEBCAM_DISTANCES = WEBCAMS_PROP + ".distances";
 	private static final String CALIBRATED_FEED_BEHAVIOR_PROP = "shootoff.arena.calibrated.behavior";
+	private static final String CALIBRATION_MODE_PROP = "shootoff.arena.calibration.mode";
 	private static final String SHOW_ARENA_SHOT_MARKERS = "shootoff.arena.show.markers";
 	private static final String CALIBRATE_AUTO_ADJUST_EXPOSURE = "shootoff.arena.calibrated.exposure";
 	private static final String SHOWED_PERSPECTIVE_USAGE_MESSAGE = "shootoff.arena.notified.perspective";
@@ -167,6 +169,7 @@ public class Configuration {
 	private VirtualMagazineProcessor magazineProcessor = null;
 	private MalfunctionsProcessor malfunctionsProcessor = null;
 	private CalibrationOption calibratedFeedBehavior = CalibrationOption.ONLY_IN_BOUNDS;
+	private CalibrationMode calibrationMode = CalibrationMode.AUTO_GREEN;
 	private boolean showArenaShotMarkers = false;
 	private boolean autoAdjustExposure = true;
 
@@ -386,6 +389,10 @@ public class Configuration {
 			setCalibratedFeedBehavior(CalibrationOption.valueOf(prop.getProperty(CALIBRATED_FEED_BEHAVIOR_PROP)));
 		}
 
+		if (prop.containsKey(CALIBRATION_MODE_PROP)) {
+			setCalibrationMode(CalibrationMode.valueOf(prop.getProperty(CALIBRATION_MODE_PROP)));
+		}
+
 		if (prop.containsKey(SHOW_ARENA_SHOT_MARKERS)) {
 			setShowArenaShotMarkers(Boolean.parseBoolean(prop.getProperty(SHOW_ARENA_SHOT_MARKERS)));
 		}
@@ -495,6 +502,7 @@ public class Configuration {
 
 		prop.setProperty(PERSPECTIVE_WEBCAM_DISTANCES, cameraDistancesList.toString());
 		prop.setProperty(CALIBRATED_FEED_BEHAVIOR_PROP, calibratedFeedBehavior.name());
+		prop.setProperty(CALIBRATION_MODE_PROP, calibrationMode.name());
 		prop.setProperty(SHOW_ARENA_SHOT_MARKERS, String.valueOf(showArenaShotMarkers));
 		prop.setProperty(CALIBRATE_AUTO_ADJUST_EXPOSURE, String.valueOf(autoAdjustExposure));
 		prop.setProperty(SHOWED_PERSPECTIVE_USAGE_MESSAGE, String.valueOf(showedPerspectiveMessage));
@@ -846,6 +854,10 @@ public class Configuration {
 		calibratedFeedBehavior = calibrationOption;
 	}
 
+	public void setCalibrationMode(CalibrationMode calibrationMode) {
+		this.calibrationMode = calibrationMode;
+	}
+
 	public void setShowArenaShotMarkers(boolean showMarkers) {
 		showArenaShotMarkers = showMarkers;
 	}
@@ -1022,6 +1034,10 @@ public class Configuration {
 
 	public CalibrationOption getCalibratedFeedBehavior() {
 		return calibratedFeedBehavior;
+	}
+
+	public CalibrationMode getCalibrationMode() {
+		return calibrationMode;
 	}
 
 	public boolean showArenaShotMarkers() {

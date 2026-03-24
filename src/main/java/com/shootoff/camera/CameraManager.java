@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 
 import com.shootoff.ObservableCloseable;
 import com.shootoff.camera.autocalibration.AutoCalibrationManager;
+import com.shootoff.camera.autocalibration.GreenScreenCalibrationManager;
 import com.shootoff.camera.cameratypes.Camera;
 import com.shootoff.camera.cameratypes.Camera.CameraState;
 import com.shootoff.camera.cameratypes.CameraEventListener;
@@ -53,6 +54,7 @@ import com.shootoff.camera.shotdetection.JavaShotDetector;
 import com.shootoff.camera.shotdetection.ShotDetector;
 import com.shootoff.camera.shotdetection.ShotYieldingShotDetector;
 import com.shootoff.config.Configuration;
+import com.shootoff.gui.CalibrationMode;
 import com.shootoff.util.TimerPool;
 import com.xuggle.mediatool.IMediaWriter;
 import com.xuggle.mediatool.ToolFactory;
@@ -77,6 +79,11 @@ import javafx.scene.paint.Color;
  * @author phrack and dmaul
  */
 public class CameraManager implements ObservableCloseable, CameraEventListener, CameraCalibrationListener {
+	private enum AutoCalibrationEngine {
+		LEGACY_PATTERN,
+		GREEN_SCREEN
+	}
+
 	private static final int MAXIMUM_CONSECUTIVE_CAMERA_ERRORS = 5;
 	private static final Logger logger = LoggerFactory.getLogger(CameraManager.class);
 	public static final int DEFAULT_FEED_WIDTH = 640;
@@ -126,8 +133,10 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	private boolean showedFPSWarning = false;
 
 	protected AutoCalibrationManager acm = null;
+	protected GreenScreenCalibrationManager greenAcm = null;
 	private final AtomicBoolean isAutoCalibrating = new AtomicBoolean(false);
 	protected boolean cameraAutoCalibrated = false;
+	private AutoCalibrationEngine activeAutoCalibrationEngine = AutoCalibrationEngine.LEGACY_PATTERN;
 
 	protected final DeduplicationProcessor deduplicationProcessor = new DeduplicationProcessor(this);
 
@@ -605,7 +614,12 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 
 	protected BufferedImage processFrame(Frame currentFrame, boolean shouldDedistort) {
 		if (isAutoCalibrating.get()) {
-			acm.processFrame(currentFrame);
+			if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
+				greenAcm.processFrame(currentFrame);
+			} else if (acm != null) {
+				acm.processFrame(currentFrame);
+			}
+
 			return currentFrame.getOriginalBufferedImage();
 		}
 
@@ -622,9 +636,13 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 		}
 
 		if (cameraAutoCalibrated && projectionBounds != null) {
-			if (shouldDedistort && acm != null) {
-				// MUST BE IN BGR pixel format.
-				currentFrame = acm.undistortFrame(currentFrame);
+			if (shouldDedistort) {
+				if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
+					currentFrame = greenAcm.undistortFrame(currentFrame);
+				} else if (acm != null) {
+					// MUST BE IN BGR pixel format.
+					currentFrame = acm.undistortFrame(currentFrame);
+				}
 			}
 
 			try {
@@ -738,7 +756,11 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	}
 
 	private void fireAutoCalibration() {
-		acm.reset();
+		if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
+			greenAcm.reset();
+		} else if (acm != null) {
+			acm.reset();
+		}
 	}
 
 	protected void autoCalibrateSuccess(Bounds arenaBounds, Optional<Dimension2D> paperDims, long delay) {
@@ -760,6 +782,21 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 
 	public void enableAutoCalibration(boolean calculateFrameDelay) {
 		if (acm == null) acm = new AutoCalibrationManager(this, camera, calculateFrameDelay);
+		activeAutoCalibrationEngine = AutoCalibrationEngine.LEGACY_PATTERN;
+		isAutoCalibrating.set(true);
+		cameraAutoCalibrated = false;
+
+		fireAutoCalibration();
+	}
+
+	public void enableAutoCalibration(CalibrationMode calibrationMode, boolean calculateFrameDelay) {
+		if (!CalibrationMode.AUTO_GREEN.equals(calibrationMode)) {
+			enableAutoCalibration(calculateFrameDelay);
+			return;
+		}
+
+		if (greenAcm == null) greenAcm = new GreenScreenCalibrationManager(this);
+		activeAutoCalibrationEngine = AutoCalibrationEngine.GREEN_SCREEN;
 		isAutoCalibrating.set(true);
 		cameraAutoCalibrated = false;
 
@@ -825,6 +862,10 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	}
 
 	public Point undistortCoords(int x, int y) {
+		if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
+			return greenAcm.undistortCoords(x, y);
+		}
+
 		if (acm == null) return new Point(x, y);
 		return acm.undistortCoords(x, y);
 	}
