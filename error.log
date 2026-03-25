@@ -1,0 +1,62 @@
+
+> Configure project :
+Using runtime libs from C:\Users\henri\Desktop\Antigravity\ShootOFF\vendor\runtime-libs
+
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileTestJava FAILED
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:60: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+		Point tl = cameraManager.undistortCoords(100, 150);
+		                                        ^
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:64: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+		Point tr = cameraManager.undistortCoords(500, 100);
+		                                        ^
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:68: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+		Point br = cameraManager.undistortCoords(550, 400);
+		                                        ^
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:72: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+		Point bl = cameraManager.undistortCoords(80, 450);
+		                                        ^
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:78: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+        Point center = cameraManager.undistortCoords(307, 275);
+                                                    ^
+C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:86: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+        Point topEdgePoint = cameraManager.undistortCoords(300, 125);
+                                                          ^
+6 errors
+
+[Incubating] Problems report is available at: file:///C:/Users/henri/Desktop/Antigravity/ShootOFF/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestJava'.
+> Compilation failed; see the compiler output below.
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:60: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+  		Point tl = cameraManager.undistortCoords(100, 150);
+  		                                        ^
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:64: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+  		Point tr = cameraManager.undistortCoords(500, 100);
+  		                                        ^
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:68: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+  		Point br = cameraManager.undistortCoords(550, 400);
+  		                                        ^
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:72: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+  		Point bl = cameraManager.undistortCoords(80, 450);
+  		                                        ^
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:78: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+          Point center = cameraManager.undistortCoords(307, 275);
+                                                      ^
+  C:\Users\henri\Desktop\Antigravity\ShootOFF\src\test\java\com\shootoff\camera\TestManualCalibrationHomography.java:86: error: incompatible types: java.awt.Point cannot be converted to org.opencv.core.Point
+          Point topEdgePoint = cameraManager.undistortCoords(300, 125);
+                                                            ^
+  6 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 2s
+3 actionable tasks: 1 executed, 2 up-to-date

@@ -52,8 +52,17 @@ import javafx.scene.Group;
 import javafx.scene.control.Label;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
-import javafx.scene.paint.Color;
+import javafx.stage.Screen;
 import javafx.stage.WindowEvent;
+import javafx.scene.paint.Color;
+
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
+import org.opencv.imgproc.Imgproc;
+import javafx.geometry.BoundingBox;
 
 public class CalibrationManager implements CameraCalibrationListener {
 	private static final int MAX_AUTO_CALIBRATION_TIME = 12 * 1000;
@@ -76,7 +85,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 	private ScheduledFuture<?> autoCalibrationFuture = null;
 
 	private Optional<TrainingExercise> savedExercise = Optional.empty();
-	private Optional<TargetView> calibrationTarget = Optional.empty();
+	private Optional<QuadrilateralCalibrationUI> quadrilateralUI = Optional.empty();
 	private Optional<CameraView> originalView = Optional.empty();
 	private Optional<Dimension2D> perspectivePaperDims = Optional.empty();
 
@@ -131,8 +140,9 @@ public class CalibrationManager implements CameraCalibrationListener {
 		// Sets calibrating and not detecting
 		calibratingCameraManager.setCalibrating(true);
 		calibratingCameraManager.setProjectionBounds(null);
+		Platform.runLater(this::removeActiveProjectionBorder);
 
-		if (arenaPane.isFullScreen()) {
+		if (arenaPane.isFullScreen() || Screen.getScreens().size() == 1) {
 			enableConfiguredCalibration();
 		} else {
 			showFullScreenRequest();
@@ -142,8 +152,40 @@ public class CalibrationManager implements CameraCalibrationListener {
 	public void stopCalibration() {
 		isCalibrating.set(false);
 
-		if (calibrationTarget.isPresent())
-			calibrate(calibrationTarget.get().getTargetGroup().getBoundsInParent(), Optional.empty(), true, -1);
+		if (quadrilateralUI.isPresent()) {
+			List<javafx.geometry.Point2D> pts = quadrilateralUI.get().getCornerPoints();
+			Point[] cvPts = new Point[4];
+			for(int i=0; i<4; i++) {
+				Bounds translatedPt = calibratingCanvasManager.translateCanvasToCamera(new BoundingBox(pts.get(i).getX(), pts.get(i).getY(), 0, 0));
+				cvPts[i] = new Point(translatedPt.getMinX(), translatedPt.getMinY());
+			}
+			
+			MatOfPoint2f sourceCorners = new MatOfPoint2f();
+			sourceCorners.fromArray(cvPts);
+			
+			RotatedRect boundsRect = Imgproc.minAreaRect(sourceCorners);
+			Rect rect = boundsRect.boundingRect();
+
+			int width = rect.width;
+			int height = rect.height;
+			if ((width & 1) == 1) width++;
+			if ((height & 1) == 1) height++;
+
+			MatOfPoint2f destCorners = new MatOfPoint2f();
+			destCorners.fromArray(
+				new Point(rect.x, rect.y), 
+				new Point(rect.x + width, rect.y),
+				new Point(rect.x + width, rect.y + height), 
+				new Point(rect.x, rect.y + height)
+			);
+
+			Mat manualPerspectiveMatrix = Imgproc.getPerspectiveTransform(sourceCorners, destCorners);
+			calibratingCameraManager.setManualPerspectiveMatrix(manualPerspectiveMatrix);
+			
+			Bounds arenaBounds = new BoundingBox(rect.x, rect.y, width, height);
+
+			calibrate(arenaBounds, Optional.empty(), true, -1);
+		}
 
 		calibratingCameraManager.disableAutoCalibration();
 
@@ -227,30 +269,42 @@ public class CalibrationManager implements CameraCalibrationListener {
 		calibratingCameraManager.setLimitDetectProjection(CalibrationOption.ONLY_IN_BOUNDS.equals(option));
 	}
 
+	private Optional<javafx.scene.shape.Rectangle> activeProjectionBorder = Optional.empty();
+
+	private void drawActiveProjectionBorder(Bounds bounds) {
+		removeActiveProjectionBorder();
+		Bounds translated = calibratingCanvasManager.translateCameraToCanvas(bounds);
+		javafx.scene.shape.Rectangle rect = new javafx.scene.shape.Rectangle(
+				translated.getMinX(), translated.getMinY(), translated.getWidth(), translated.getHeight());
+		rect.setFill(Color.TRANSPARENT);
+		rect.setStroke(Color.RED);
+		rect.setStrokeWidth(2.0);
+		rect.getStrokeDashArray().addAll(10d, 5d);
+		activeProjectionBorder = Optional.of(rect);
+		calibratingCanvasManager.addChild(rect);
+	}
+
+	private void removeActiveProjectionBorder() {
+		if (activeProjectionBorder.isPresent()) {
+			calibratingCanvasManager.removeChild(activeProjectionBorder.get());
+			activeProjectionBorder = Optional.empty();
+		}
+	}
+
 	public void arenaClosing() {
 		calibratingCameraManager.setProjectionBounds(null);
+		Platform.runLater(this::removeActiveProjectionBorder);
 	}
 
 	private void createCalibrationTarget(double x, double y, double width, double height) {
-		final RectangleRegion calibrationRectangle = new RectangleRegion(x, y, width, height);
-		calibrationRectangle.setFill(Color.PURPLE);
-		calibrationRectangle.setOpacity(TargetIO.DEFAULT_OPACITY);
-
-		final Group calibrationGroup = new Group();
-		calibrationGroup.setOnMouseClicked((e) -> {
-			calibrationGroup.requestFocus();
-		});
-		calibrationGroup.getChildren().add(calibrationRectangle);
-
-		calibrationTarget = Optional.of((TargetView) calibratingCanvasManager.addTarget(null, calibrationGroup,
-				new HashMap<String, String>(), false));
-		calibrationTarget.get().setKeepInBounds(true);
+		quadrilateralUI = Optional.of(new QuadrilateralCalibrationUI(x, y, width, height));
+		calibratingCanvasManager.addChild(quadrilateralUI.get());
 	}
 
 	private void removeCalibrationTargetIfPresent() {
-		if (calibrationTarget.isPresent()) {
-			calibratingCanvasManager.removeTarget(calibrationTarget.get());
-			calibrationTarget = Optional.empty();
+		if (quadrilateralUI.isPresent()) {
+			calibratingCanvasManager.removeChild(quadrilateralUI.get());
+			quadrilateralUI = Optional.empty();
 		}
 	}
 
@@ -260,6 +314,8 @@ public class CalibrationManager implements CameraCalibrationListener {
 		calibratingCanvasManager.setProjectorArena(arenaPane, bounds);
 		configureArenaCamera(option);
 		calibratingCameraManager.setProjectionBounds(translatedToCameraBounds);
+
+		Platform.runLater(() -> drawActiveProjectionBorder(translatedToCameraBounds));
 	}
 
 	void beginManualCalibration() {
@@ -281,10 +337,10 @@ public class CalibrationManager implements CameraCalibrationListener {
 
 		showManualCalibrationRequestMessage();
 
-		if (!calibrationTarget.isPresent()) {
+		if (!quadrilateralUI.isPresent()) {
 			createCalibrationTarget(DEFAULT_DIM, DEFAULT_DIM, DEFAULT_POS, DEFAULT_POS);
 		} else {
-			calibratingCameraManager.getCameraView().addTarget(calibrationTarget.get());
+			calibratingCameraManager.getCameraView().addChild(quadrilateralUI.get());
 		}
 	}
 
@@ -373,7 +429,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 
 		autoCalibrationFuture = TimerPool.schedule(() -> {
 			Platform.runLater(() -> {
-				if (isCalibrating.get() && isFullScreen) {
+				if (isCalibrating.get() && (isFullScreen || Screen.getScreens().size() == 1)) {
 					if (autocalibrationListener.isPresent()) {
 						autocalibrationListener.get().autocalibrationTimedOut();
 						stopCalibration();
@@ -383,7 +439,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 					}
 				}
 				// Keep waiting
-				else if (!isFullScreen) launchAutoCalibrationTimer();
+				else if (!isFullScreen && Screen.getScreens().size() > 1) launchAutoCalibrationTimer();
 			});
 		}, autocalibrationListener.isPresent() ? MAX_AUTO_CALIBRATION_TIME_HEADLESS : MAX_AUTO_CALIBRATION_TIME);
 	}
@@ -457,7 +513,7 @@ public class CalibrationManager implements CameraCalibrationListener {
 
 		if (!isCalibrating.get()) {
 			enableCalibration();
-		} else if (!fullScreen) {
+		} else if (!fullScreen && Screen.getScreens().size() > 1) {
 			calibratingCameraManager.disableAutoCalibration();
 
 			removeCalibrationTargetIfPresent();

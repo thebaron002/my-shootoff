@@ -31,8 +31,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opencv.core.Core;
 import org.opencv.core.CvException;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.imgproc.Imgproc;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,8 +140,13 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	private final AtomicBoolean isAutoCalibrating = new AtomicBoolean(false);
 	protected boolean cameraAutoCalibrated = false;
 	private AutoCalibrationEngine activeAutoCalibrationEngine = AutoCalibrationEngine.LEGACY_PATTERN;
+	private Mat manualPerspectiveMatrix = null;
 
 	protected final DeduplicationProcessor deduplicationProcessor = new DeduplicationProcessor(this);
+
+	public void setManualPerspectiveMatrix(Mat matrix) {
+		this.manualPerspectiveMatrix = matrix;
+	}
 
 	private CameraCalibrationListener cameraCalibrationListener;
 
@@ -635,13 +643,17 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 			}
 		}
 
-		if (cameraAutoCalibrated && projectionBounds != null) {
+		if (projectionBounds != null && (cameraAutoCalibrated || manualPerspectiveMatrix != null)) {
 			if (shouldDedistort) {
-				if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
+				if (cameraAutoCalibrated && AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
 					currentFrame = greenAcm.undistortFrame(currentFrame);
-				} else if (acm != null) {
+				} else if (cameraAutoCalibrated && acm != null) {
 					// MUST BE IN BGR pixel format.
 					currentFrame = acm.undistortFrame(currentFrame);
+				} else if (manualPerspectiveMatrix != null) {
+					final Mat corrected = new Mat();
+					Imgproc.warpPerspective(currentFrame.getOriginalMat(), corrected, manualPerspectiveMatrix, currentFrame.getOriginalMat().size(), Imgproc.INTER_LINEAR);
+					currentFrame.setMat(corrected);
 				}
 			}
 
@@ -864,6 +876,13 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	public Point undistortCoords(int x, int y) {
 		if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
 			return greenAcm.undistortCoords(x, y);
+		}
+
+		if (manualPerspectiveMatrix != null) {
+			final MatOfPoint2f p = new MatOfPoint2f();
+			p.fromArray(new org.opencv.core.Point(x, y));
+			Core.perspectiveTransform(p, p, manualPerspectiveMatrix);
+			return new Point((int) p.get(0, 0)[0], (int) p.get(0, 0)[1]);
 		}
 
 		if (acm == null) return new Point(x, y);

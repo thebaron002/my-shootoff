@@ -434,7 +434,7 @@ public class ProjectorArenaPane extends AnchorPane implements CalibrationListene
 
 	public void canvasKeyPressed(KeyEvent event) {
 		final boolean macFullscreen = event.getCode() == KeyCode.F && event.isControlDown() && event.isShortcutDown();
-		if (event.getCode() == KeyCode.F11 || macFullscreen) {
+		if (event.getCode() == KeyCode.F11 || event.getCode() == KeyCode.S || macFullscreen) {
 			toggleFullScreen();
 
 			// Manually going full screen with an arena that was manually
