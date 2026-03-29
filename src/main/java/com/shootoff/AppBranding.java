@@ -1,7 +1,7 @@
 package com.shootoff;
 
 public final class AppBranding {
-	private static final String DEFAULT_APP_NAME = "My ShootOFF";
+	private static final String DEFAULT_APP_NAME = "ShootOFF 5.0";
 
 	private AppBranding() {}
 
@@ -14,6 +14,10 @@ public final class AppBranding {
 	}
 
 	public static String getVersionedAppName(String version) {
+		if (getAppName().matches(".*\\d+(?:\\.\\d+)*.*")) {
+			return getAppName();
+		}
+
 		return getAppName() + " " + version;
 	}
 }

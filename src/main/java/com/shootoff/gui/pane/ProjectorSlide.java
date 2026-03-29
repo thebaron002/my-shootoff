@@ -190,6 +190,10 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 	}
 
 	public void startArena() {
+		startArena(true);
+	}
+
+	public void startArena(boolean autoStartCalibration) {
 		if (arenaPane != null) {
 			// Already started
 			return;
@@ -277,7 +281,9 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 		});
 
 		// Display the arena
-		calibrateButton.fire();
+		if (autoStartCalibration) {
+			calibrateButton.fire();
+		}
 		arenaPane.toggleArena();
 		arenaPane.autoPlaceArena();
 

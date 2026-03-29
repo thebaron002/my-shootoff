@@ -75,14 +75,15 @@ def jpackageRuntimeModules = (javafxModules + [
 def modernRuntimeDir = file("${buildDir}/modern-runtime")
 def jpackageExecutable = file("${javaHome}/bin/jpackage.exe")
 def windowsIconFile = file('src/main/resources/images/windows_icon.ico')
-def appVendor = 'ShootOFF'
-def appDescription = 'A virtual shooting range to enhance laser dry fire training'
+def appDisplayName = 'ShootOFF 5.0'
+def appVendor = 'Antigravity'
+def appDescription = 'Army-first dry fire trainer for calibrated laser qualification sessions'
 def appHomePlaceholder = '$APPDIR'
 def jpackageBaseDir = file("${buildDir}/jpackage")
 def jpackageInputDir = file("${jpackageBaseDir}/input")
 def jpackageTempDir = file("${jpackageBaseDir}/temp")
 def jpackageAppImageOutputDir = file("${jpackageBaseDir}/app-image")
-def jpackageAppImageDir = file("${jpackageAppImageOutputDir}/ShootOFF")
+def jpackageAppImageDir = file("${jpackageAppImageOutputDir}/${appDisplayName}")
 def installerOutputDir = file("${buildDir}/installer")
 def winUpgradeUuid = '75714003-bbcd-40d5-9e3b-d8c3ad4cfcdd'
 def localWix3Dir = file('.tools/wix3/extract')
@@ -114,7 +115,7 @@ def writableResources = 'shootoff-writable-resources.jar'   // JAR to contain fi
 def writableResourcesMetadata = 'shootoff-writable-resources.xml'
 def diagnosticsJar = 'ShootOFF-diagnostics.jar'
 def releaseZip = 'shootoff-' + version + '-final.zip'
-def releaseMsi = 'ShootOFF' + '-' + version + '.msi'
+def releaseMsi = appDisplayName + '-' + version + '.msi'
 def license = 'GPLv3'
 
 def keyStore = 'shootoff_cs.jks'
@@ -233,8 +234,8 @@ jar {
     manifest {
         attributes(
             'Main-Class': mainClassName,
-            'Application-Name': 'ShootOFF',
-            'Created-By': 'ShootOFF Modernized Build'
+            'Application-Name': appDisplayName,
+            'Created-By': "${appDisplayName} Modernized Build"
         )
     }
 }
@@ -450,7 +451,7 @@ tasks.register('modernAppImage') {
             '--dest', jpackageAppImageOutputDir.absolutePath,
             '--temp', jpackageTempDir.absolutePath,
             '--input', jpackageInputDir.absolutePath,
-            '--name', 'ShootOFF',
+            '--name', appDisplayName,
             '--app-version', installerVersion,
             '--vendor', appVendor,
             '--description', appDescription,
@@ -495,19 +496,19 @@ tasks.register('modernMsi') {
             '--type', 'msi',
             '--dest', installerOutputDir.absolutePath,
             '--temp', jpackageTempDir.absolutePath,
-            '--name', 'ShootOFF',
+            '--name', appDisplayName,
             '--app-version', installerVersion,
             '--vendor', appVendor,
             '--description', appDescription,
-            '--about-url', 'https://github.com/phrack/ShootOFF',
+            '--about-url', 'https://github.com/thebaron002/my-shootoff',
             '--copyright', 'ShootOFF contributors',
             '--icon', windowsIconFile.absolutePath,
             '--app-image', jpackageAppImageDir.absolutePath,
             '--license-file', file('LICENSE').absolutePath,
-            '--install-dir', 'ShootOFF',
+            '--install-dir', appDisplayName,
             '--win-dir-chooser',
             '--win-menu',
-            '--win-menu-group', 'ShootOFF',
+            '--win-menu-group', appDisplayName,
             '--win-per-user-install',
             '--win-shortcut',
             '--win-shortcut-prompt',

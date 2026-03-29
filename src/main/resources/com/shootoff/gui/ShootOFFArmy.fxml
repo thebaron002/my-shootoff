@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TabPane?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox fx:id="shootOffContainer"
+      xmlns="http://javafx.com/javafx/8"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="com.shootoff.gui.controller.ShootOFFArmyController"
+      prefHeight="900.0"
+      prefWidth="1440.0"
+      style="-fx-background-color: linear-gradient(to bottom, #0b1220, #111827 22%, #0f172a 100%);">
+   <children>
+      <HBox VBox.vgrow="ALWAYS">
+         <children>
+            <VBox minWidth="210.0"
+                  prefWidth="210.0"
+                  maxWidth="210.0"
+                  spacing="14.0"
+                  style="-fx-background-color: rgba(8, 15, 28, 0.92); -fx-border-color: rgba(148, 163, 184, 0.15); -fx-border-width: 0 1 0 0;">
+               <children>
+                  <VBox spacing="8.0">
+                     <children>
+                        <Label text="Army Workflow" textFill="#8fb7ff">
+                           <style>-fx-font-size: 14px; -fx-font-weight: bold;</style>
+                        </Label>
+                        <Label text="ShootOFF 5.0" textFill="WHITE">
+                           <style>-fx-font-size: 28px; -fx-font-weight: bold;</style>
+                        </Label>
+                        <Label text="Focused Army qualification workflow built on the modernized runtime."
+                               textFill="#b4bfce"
+                               wrapText="true">
+                           <style>-fx-font-size: 13px;</style>
+                        </Label>
+                     </children>
+                  </VBox>
+                  <Separator />
+                  <Button fx:id="homeNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showHome" text="Home" />
+                  <Button fx:id="setupNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showSetup" text="Setup" />
+                  <Button fx:id="calibrateNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showCalibrate" text="Calibrate" />
+                  <Button fx:id="stageNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showStageEditor" text="Stage" />
+                  <Button fx:id="trainNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showTrain" text="Train" />
+                  <Button fx:id="resultNavButton" maxWidth="1.7976931348623157E308" mnemonicParsing="false" onAction="#showResults" text="Results" />
+                  <Region VBox.vgrow="ALWAYS" />
+                  <Label text="Army Table VI MVP" textFill="#64748b">
+                     <style>-fx-font-size: 12px; -fx-font-weight: bold;</style>
+                  </Label>
+                  <Label text="Focused Army workflow."
+                         textFill="#94a3b8"
+                         wrapText="true">
+                     <style>-fx-font-size: 12px;</style>
+                  </Label>
+               </children>
+               <padding>
+                  <Insets top="28.0" right="18.0" bottom="24.0" left="18.0" />
+               </padding>
+            </VBox>
+
+            <VBox spacing="18.0" HBox.hgrow="ALWAYS">
+               <children>
+                  <HBox alignment="CENTER_LEFT"
+                        spacing="18.0"
+                        style="-fx-background-color: rgba(15, 23, 42, 0.82); -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-width: 0 0 1 0;">
+                     <children>
+                        <VBox spacing="6.0" HBox.hgrow="ALWAYS">
+                           <children>
+                              <Label fx:id="appTitleLabel" textFill="WHITE">
+                                 <style>-fx-font-size: 34px; -fx-font-weight: bold;</style>
+                              </Label>
+                              <Label fx:id="appSubtitleLabel" textFill="#b8c3d5" wrapText="true">
+                                 <style>-fx-font-size: 14px;</style>
+                              </Label>
+                           </children>
+                        </VBox>
+                        <VBox alignment="CENTER_RIGHT"
+                              spacing="8.0"
+                              style="-fx-background-color: rgba(20, 33, 58, 0.96); -fx-background-radius: 18;">
+                           <children>
+                              <Label text="Current Focus" textFill="#7fb4ff">
+                                 <style>-fx-font-size: 12px; -fx-font-weight: bold;</style>
+                              </Label>
+                              <Label fx:id="workflowStatusLabel" textFill="WHITE" wrapText="true">
+                                 <style>-fx-font-size: 17px; -fx-font-weight: bold;</style>
+                              </Label>
+                              <Label fx:id="workflowDetailLabel" maxWidth="420.0" textFill="#c7d1df" wrapText="true">
+                                 <style>-fx-font-size: 13px;</style>
+                              </Label>
+                           </children>
+                           <padding>
+                              <Insets top="16.0" right="18.0" bottom="16.0" left="18.0" />
+                           </padding>
+                        </VBox>
+                     </children>
+                     <padding>
+                        <Insets top="20.0" right="24.0" bottom="20.0" left="24.0" />
+                     </padding>
+                  </HBox>
+
+                  <StackPane fx:id="armyContentStack" VBox.vgrow="ALWAYS">
+                     <children>
+                        <VBox fx:id="homePane" alignment="TOP_LEFT" spacing="24.0">
+                           <children>
+                              <HBox spacing="20.0">
+                                 <children>
+                                    <VBox spacing="14.0"
+                                          HBox.hgrow="ALWAYS"
+                                          style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                       <children>
+                                          <Label text="Army-first training shell" textFill="#7fb4ff">
+                                             <style>-fx-font-size: 14px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="Army Table VI without legacy clutter."
+                                                 textFill="WHITE"
+                                                 wrapText="true">
+                                             <style>-fx-font-size: 28px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="Use one guided path for setup, calibration, stage editing, training, and results."
+                                                 textFill="#c8d1df"
+                                                 wrapText="true">
+                                             <style>-fx-font-size: 14px;</style>
+                                          </Label>
+                                          <HBox spacing="12.0">
+                                             <children>
+                                                <Button mnemonicParsing="false"
+                                                        onAction="#launchSetup"
+                                                        style="-fx-background-color: #2a7fff; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 12 20 12 20; -fx-background-radius: 14;"
+                                                        text="Start Setup" />
+                                                <Button mnemonicParsing="false"
+                                                        onAction="#launchStageEditor"
+                                                        style="-fx-background-color: #1f2937; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 12 20 12 20; -fx-background-radius: 14; -fx-border-color: #334155; -fx-border-radius: 14;"
+                                                        text="Open Stage Editor" />
+                                             </children>
+                                          </HBox>
+                                       </children>
+                                       <padding>
+                                          <Insets top="26.0" right="26.0" bottom="26.0" left="26.0" />
+                                       </padding>
+                                    </VBox>
+
+                                    <VBox minWidth="240.0"
+                                          prefWidth="240.0"
+                                          maxWidth="240.0"
+                                          spacing="14.0"
+                                          style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                       <children>
+                                          <Label text="Build" textFill="#7fb4ff">
+                                             <style>-fx-font-size: 12px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label fx:id="homeVersionLabel" textFill="WHITE">
+                                             <style>-fx-font-size: 22px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Separator />
+                                          <Label text="Recommended Path" textFill="#7fb4ff">
+                                             <style>-fx-font-size: 12px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="1. Setup&#10;2. Calibrate&#10;3. Save stage&#10;4. Train&#10;5. Review"
+                                                 textFill="#dbe3ef"
+                                                 wrapText="true">
+                                             <style>-fx-font-size: 14px;</style>
+                                          </Label>
+                                       </children>
+                                       <padding>
+                                          <Insets top="22.0" right="22.0" bottom="22.0" left="22.0" />
+                                       </padding>
+                                    </VBox>
+                                 </children>
+                              </HBox>
+
+                              <HBox spacing="18.0">
+                                 <children>
+                                    <VBox spacing="10.0"
+                                          HBox.hgrow="ALWAYS"
+                                          style="-fx-background-color: rgba(15, 23, 42, 0.9); -fx-background-radius: 18; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 18;">
+                                       <children>
+                                          <Label text="Setup" textFill="WHITE">
+                                             <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="Configure projection width, shooter distance, and camera path before the run."
+                                                 textFill="#c8d1df"
+                                                 wrapText="true" />
+                                       </children>
+                                       <padding>
+                                          <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                       </padding>
+                                    </VBox>
+                                    <VBox spacing="10.0"
+                                          HBox.hgrow="ALWAYS"
+                                          style="-fx-background-color: rgba(15, 23, 42, 0.9); -fx-background-radius: 18; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 18;">
+                                       <children>
+                                          <Label text="Calibrate" textFill="WHITE">
+                                             <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="Use Auto Green or Manual calibration without leaving the Army flow."
+                                                 textFill="#c8d1df"
+                                                 wrapText="true" />
+                                       </children>
+                                       <padding>
+                                          <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                       </padding>
+                                    </VBox>
+                                    <VBox spacing="10.0"
+                                          HBox.hgrow="ALWAYS"
+                                          style="-fx-background-color: rgba(15, 23, 42, 0.9); -fx-background-radius: 18; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 18;">
+                                       <children>
+                                          <Label text="Train" textFill="WHITE">
+                                             <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                          </Label>
+                                          <Label text="Run Army Table VI and review a cleaner score summary after each session."
+                                                 textFill="#c8d1df"
+                                                 wrapText="true" />
+                                       </children>
+                                       <padding>
+                                          <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                       </padding>
+                                    </VBox>
+                                 </children>
+                              </HBox>
+                           </children>
+                           <padding>
+                              <Insets top="4.0" right="24.0" bottom="24.0" left="24.0" />
+                           </padding>
+                        </VBox>
+
+                        <VBox fx:id="workspacePane" managed="false" spacing="16.0" visible="false">
+                           <children>
+                              <HBox fx:id="controlsContainer" alignment="CENTER_LEFT" spacing="12.0" />
+                              <Label fx:id="workspaceHintLabel" textFill="#c2ccda" wrapText="true">
+                                 <style>-fx-font-size: 13px; -fx-font-weight: bold;</style>
+                              </Label>
+                              <VBox fx:id="bodyContainer" spacing="18.0" VBox.vgrow="ALWAYS">
+                                 <children>
+                                    <HBox spacing="18.0" VBox.vgrow="ALWAYS">
+                                       <children>
+                                          <VBox spacing="12.0"
+                                                HBox.hgrow="ALWAYS"
+                                                style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                             <children>
+                                                <Label text="Live Cameras and Arena" textFill="WHITE">
+                                                   <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                                </Label>
+                                                <TabPane fx:id="cameraTabPane"
+                                                         minHeight="560.0"
+                                                         minWidth="760.0"
+                                                         prefHeight="640.0"
+                                                         prefWidth="900.0"
+                                                         tabClosingPolicy="UNAVAILABLE"
+                                                         VBox.vgrow="ALWAYS" />
+                                             </children>
+                                             <padding>
+                                                <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                             </padding>
+                                          </VBox>
+
+                                          <VBox prefWidth="400.0" spacing="16.0">
+                                             <children>
+                                                <VBox spacing="12.0"
+                                                      style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                                   <children>
+                                                      <Label text="Session Actions" textFill="WHITE">
+                                                         <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                                      </Label>
+                                                      <VBox fx:id="buttonsContainer" alignment="TOP_CENTER" spacing="18.0">
+                                                         <children>
+                                                            <Button mnemonicParsing="false"
+                                                                    onAction="#resetClicked"
+                                                                    prefHeight="100.0"
+                                                                    prefWidth="150.0"
+                                                                    text="Reset" />
+                                                         </children>
+                                                      </VBox>
+                                                   </children>
+                                                   <padding>
+                                                      <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                                   </padding>
+                                                </VBox>
+
+                                                <VBox spacing="12.0"
+                                                      VBox.vgrow="ALWAYS"
+                                                      style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                                   <children>
+                                                      <Label text="Army Controls" textFill="WHITE">
+                                                         <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                                      </Label>
+                                                      <ScrollPane fx:id="trainingExerciseScrollPane"
+                                                                  fitToWidth="true"
+                                                                  hbarPolicy="NEVER"
+                                                                  VBox.vgrow="ALWAYS">
+                                                         <content>
+                                                            <VBox fx:id="trainingExerciseContainer" spacing="10.0" />
+                                                         </content>
+                                                      </ScrollPane>
+                                                   </children>
+                                                   <padding>
+                                                      <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                                   </padding>
+                                                </VBox>
+
+                                                <VBox spacing="12.0"
+                                                      VBox.vgrow="ALWAYS"
+                                                      style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                                   <children>
+                                                      <Label text="Shot Timeline" textFill="WHITE">
+                                                         <style>-fx-font-size: 18px; -fx-font-weight: bold;</style>
+                                                      </Label>
+                                                      <TableView fx:id="shotTimerTable" VBox.vgrow="ALWAYS" />
+                                                   </children>
+                                                   <padding>
+                                                      <Insets top="18.0" right="18.0" bottom="18.0" left="18.0" />
+                                                   </padding>
+                                                </VBox>
+                                             </children>
+                                          </VBox>
+                                       </children>
+                                    </HBox>
+                                 </children>
+                              </VBox>
+                           </children>
+                           <padding>
+                              <Insets top="4.0" right="24.0" bottom="24.0" left="24.0" />
+                           </padding>
+                        </VBox>
+
+                        <VBox fx:id="resultPane" alignment="TOP_LEFT" managed="false" spacing="20.0" visible="false">
+                           <children>
+                              <VBox spacing="12.0"
+                                    style="-fx-background-color: rgba(15, 23, 42, 0.92); -fx-background-radius: 22; -fx-border-color: rgba(148, 163, 184, 0.14); -fx-border-radius: 22;">
+                                 <children>
+                                    <Label text="Qualification Result" textFill="#7fb4ff">
+                                       <style>-fx-font-size: 14px; -fx-font-weight: bold;</style>
+                                    </Label>
+                                    <Label fx:id="resultSummaryLabel" textFill="WHITE" wrapText="true">
+                                       <style>-fx-font-size: 34px; -fx-font-weight: bold;</style>
+                                    </Label>
+                                    <Label fx:id="resultDetailLabel" textFill="#c9d2df" wrapText="true">
+                                       <style>-fx-font-size: 15px;</style>
+                                    </Label>
+                                    <HBox spacing="12.0">
+                                       <children>
+                                          <Button mnemonicParsing="false"
+                                                  onAction="#launchTraining"
+                                                  style="-fx-background-color: #2a7fff; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 12 20 12 20; -fx-background-radius: 14;"
+                                                  text="Run Again" />
+                                          <Button mnemonicParsing="false"
+                                                  onAction="#launchStageEditor"
+                                                  style="-fx-background-color: #1f2937; -fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; -fx-padding: 12 20 12 20; -fx-background-radius: 14; -fx-border-color: #334155; -fx-border-radius: 14;"
+                                                  text="Adjust Stage" />
+                                       </children>
+                                    </HBox>
+                                 </children>
+                                 <padding>
+                                    <Insets top="26.0" right="26.0" bottom="26.0" left="26.0" />
+                                 </padding>
+                              </VBox>
+                           </children>
+                           <padding>
+                              <Insets top="4.0" right="24.0" bottom="24.0" left="24.0" />
+                           </padding>
+                        </VBox>
+                     </children>
+                  </StackPane>
+               </children>
+            </VBox>
+         </children>
+      </HBox>
+   </children>
+</VBox>

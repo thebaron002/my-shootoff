@@ -584,7 +584,7 @@ public class Main extends Application {
 
 	private void startGui(Configuration config) {
 		try {
-			final FXMLLoader loader = new FXMLLoader(Main.class.getResource("/com/shootoff/gui/ShootOFF.fxml"));
+			final FXMLLoader loader = new FXMLLoader(Main.class.getResource("/com/shootoff/gui/ShootOFFArmy.fxml"));
 			loader.load();
 
 			final Scene scene = new Scene(loader.getRoot());

@@ -167,7 +167,7 @@ public class ShootOFFController implements CameraConfigListener, CameraErrorView
 
 				// If the screen has an unusually short display for
 				// a modern system, add a scroll bar to the body
-				if (shootOffScreen.getBounds().getHeight() < 800) {
+				if (shootOffScreen.getBounds().getHeight() < 800 && bodyContainer.getParent() == shootOffContainer) {
 					shootOffContainer.getChildren().remove(bodyContainer);
 					shootOffContainer.getChildren().add(new ScrollPane(bodyContainer));
 				}
@@ -1037,5 +1037,37 @@ public class ShootOFFController implements CameraConfigListener, CameraErrorView
 	@Override
 	public PluginEngine getPluginEngine() {
 		return pluginEngine;
+	}
+
+	protected HBox getControlsContainerNode() {
+		return controlsContainer;
+	}
+
+	protected VBox getBodyContainerNode() {
+		return bodyContainer;
+	}
+
+	protected TabPane getCameraTabPaneNode() {
+		return cameraTabPane;
+	}
+
+	protected TableView<ShotEntry> getShotTimerTableNode() {
+		return shotTimerTable;
+	}
+
+	protected ScrollPane getTrainingExerciseScrollPaneNode() {
+		return trainingExerciseScrollPane;
+	}
+
+	protected ExerciseSlide getExerciseSlideInternal() {
+		return exerciseSlide;
+	}
+
+	protected ProjectorSlide getProjectorSlideInternal() {
+		return projectorSlide;
+	}
+
+	protected Configuration getConfigurationInternal() {
+		return config;
 	}
 }
