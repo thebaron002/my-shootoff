@@ -313,6 +313,15 @@ public class ProjectorTrainingExerciseBase extends TrainingExerciseBase {
 	 * 
 	 * @since 3.8
 	 */
+	/**
+	 * Returns the projector arena pane for this exercise.
+	 * @return the ProjectorArenaPane
+	 * @since 4.0
+	 */
+	protected ProjectorArenaPane getArenaPane() {
+		return arenaPane;
+	}
+
 	public boolean isPerspectiveInitialized() {
 		return arenaPane.getPerspectiveManager().isPresent()
 				&& arenaPane.getPerspectiveManager().get().isInitialized();

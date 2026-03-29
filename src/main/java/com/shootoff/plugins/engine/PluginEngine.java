@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.shootoff.plugins.ArmyTableVIQualification;
 import com.shootoff.plugins.BouncingTargets;
 import com.shootoff.plugins.DuelingTree;
 import com.shootoff.plugins.ExerciseMetadata;
@@ -105,6 +106,7 @@ public class PluginEngine implements Runnable {
 		pluginListener.registerProjectorExercise(new DuelingTree());
 		pluginListener.registerProjectorExercise(new ShootDontShoot());
 		pluginListener.registerProjectorExercise(new SteelChallenge());
+		pluginListener.registerProjectorExercise(new ArmyTableVIQualification());
 	}
 
 	private boolean registerPlugin(final Path jarPath) {

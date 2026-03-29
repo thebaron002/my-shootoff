@@ -39,22 +39,15 @@ public class QuadrilateralCalibrationUI extends Group {
 		anchor.setStroke(Color.WHITE);
 		anchor.setStrokeWidth(2);
 		
-		final DoubleProperty dragDeltaX = new SimpleDoubleProperty();
-		final DoubleProperty dragDeltaY = new SimpleDoubleProperty();
-
 		anchor.setOnMousePressed(event -> {
-			dragDeltaX.set(anchor.getCenterX() - event.getSceneX());
-			dragDeltaY.set(anchor.getCenterY() - event.getSceneY());
 			anchor.toFront();
 		});
 
 		anchor.setOnMouseDragged(event -> {
-			double newX = event.getSceneX() + dragDeltaX.get();
-			double newY = event.getSceneY() + dragDeltaY.get();
+			javafx.geometry.Point2D localPoint = getParent().sceneToLocal(event.getSceneX(), event.getSceneY());
 			
-			// Basic bounds checking could go here if needed, but for now allow free drag
-			anchor.setCenterX(newX);
-			anchor.setCenterY(newY);
+			anchor.setCenterX(localPoint.getX());
+			anchor.setCenterY(localPoint.getY());
 			updatePolygon();
 		});
 		

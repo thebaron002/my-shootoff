@@ -63,6 +63,15 @@ import org.opencv.core.Rect;
 import org.opencv.core.RotatedRect;
 import org.opencv.imgproc.Imgproc;
 import javafx.geometry.BoundingBox;
+import javafx.util.Pair;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
+import javafx.scene.control.ButtonBar.ButtonData;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 
 public class CalibrationManager implements CameraCalibrationListener {
 	private static final int MAX_AUTO_CALIBRATION_TIME = 12 * 1000;
@@ -163,28 +172,32 @@ public class CalibrationManager implements CameraCalibrationListener {
 			MatOfPoint2f sourceCorners = new MatOfPoint2f();
 			sourceCorners.fromArray(cvPts);
 			
-			RotatedRect boundsRect = Imgproc.minAreaRect(sourceCorners);
-			Rect rect = boundsRect.boundingRect();
-
-			int width = rect.width;
-			int height = rect.height;
-			if ((width & 1) == 1) width++;
-			if ((height & 1) == 1) height++;
+			int width = calibratingCameraManager.getFeedWidth();
+			int height = calibratingCameraManager.getFeedHeight();
 
 			MatOfPoint2f destCorners = new MatOfPoint2f();
 			destCorners.fromArray(
-				new Point(rect.x, rect.y), 
-				new Point(rect.x + width, rect.y),
-				new Point(rect.x + width, rect.y + height), 
-				new Point(rect.x, rect.y + height)
+				new Point(0, 0), 
+				new Point(width, 0),
+				new Point(width, height), 
+				new Point(0, height)
 			);
 
 			Mat manualPerspectiveMatrix = Imgproc.getPerspectiveTransform(sourceCorners, destCorners);
 			calibratingCameraManager.setManualPerspectiveMatrix(manualPerspectiveMatrix);
 			
-			Bounds arenaBounds = new BoundingBox(rect.x, rect.y, width, height);
-
-			calibrate(arenaBounds, Optional.empty(), true, -1);
+			// After warp, the TV fills the full frame. Set projection bounds directly
+			// in camera space — do NOT go through calibrate() which double-translates.
+			Bounds cameraBounds = new BoundingBox(0, 0, width, height);
+			calibratingCameraManager.setProjectionBounds(cameraBounds);
+			configureArenaCamera(calibrationConfigurator.getCalibratedFeedBehavior());
+			
+			// Set the canvas projection for display (translate camera→canvas)
+			Bounds canvasBounds = calibratingCanvasManager.translateCameraToCanvas(cameraBounds);
+			calibratingCanvasManager.setProjectorArena(arenaPane, canvasBounds);
+			Platform.runLater(() -> drawActiveProjectionBorder(cameraBounds));
+			
+			this.perspectivePaperDims = Optional.empty();
 		}
 
 		calibratingCameraManager.disableAutoCalibration();
@@ -208,22 +221,31 @@ public class CalibrationManager implements CameraCalibrationListener {
 				calibratingCameraManager.getFeedHeight());
 
 		if (calibratingCameraManager.getProjectionBounds().isPresent()) {
+			Bounds bounds = calibratingCameraManager.getProjectionBounds().get();
 			if (PerspectiveManager.isCameraSupported(calibratingCameraManager.getName(), feedDim)) {
 				if (perspectivePaperDims.isPresent()) {
 					pm = new PerspectiveManager(calibratingCameraManager.getName(),
-							calibratingCameraManager.getProjectionBounds().get(), feedDim, perspectivePaperDims.get(),
+							bounds, feedDim, perspectivePaperDims.get(),
 							arenaPane.getArenaStageResolution());
 				} else {
 					pm = new PerspectiveManager(calibratingCameraManager.getName(),
-							calibratingCameraManager.getProjectionBounds().get(), feedDim,
+							bounds, feedDim,
 							arenaPane.getArenaStageResolution());
 				}
 			} else {
 				if (perspectivePaperDims.isPresent()) {
-					pm = new PerspectiveManager(calibratingCameraManager.getProjectionBounds().get(), feedDim,
+					pm = new PerspectiveManager(bounds, feedDim,
 							perspectivePaperDims.get(), arenaPane.getArenaStageResolution());
 				} else {
-					logger.debug("Too many perspective parameters are unknown to create a perspective manager.");
+					// FALLBACK: Create a basic PerspectiveManager so exercises like Army Table VI can function.
+					// We use a default 2m width assumption (2000mm).
+					pm = new PerspectiveManager(bounds);
+					pm.setCameraFeedSize((int)feedDim.getWidth(), (int)feedDim.getHeight());
+					pm.setProjectorResolution(arenaPane.getArenaStageResolution());
+					pm.setProjectionSize(2000, 1500); // 2000mm x 1500mm default
+					pm.calculateRealWorldSize();
+					
+					logger.info("Created fallback PerspectiveManager for manual calibration (2m width assumed).");
 				}
 			}
 		}
@@ -246,6 +268,67 @@ public class CalibrationManager implements CameraCalibrationListener {
 		arenaPane.getCanvasManager().setShowShots(config.showArenaShotMarkers());
 
 		if (savedExercise.isPresent()) exerciseListener.setProjectorExercise(savedExercise.get());
+
+		// If we created a fallback PerspectiveManager, or if we want to confirm, 
+		// show the dialog for screen width and shooter distance.
+		if (pm != null && !pm.isInitialized()) {
+			showManualPerspectiveDialog(pm);
+		}
+	}
+
+	private void showManualPerspectiveDialog(PerspectiveManager pm) {
+		Platform.runLater(() -> {
+			Dialog<Pair<String, String>> dialog = new Dialog<>();
+			dialog.setTitle("Manual Perspective Calibration");
+			dialog.setHeaderText("Please provide the physical screen dimensions and shooter distance.\n" +
+			                   "This is required for targets to scale correctly to real-world distances.");
+
+			ButtonType okButtonType = new ButtonType("Save", ButtonData.OK_DONE);
+			dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
+
+			GridPane grid = new GridPane();
+			grid.setHgap(10);
+			grid.setVgap(10);
+
+			TextField widthField = new TextField("2000"); // 2m default
+			TextField distanceField = new TextField("3000"); // 3m default
+
+			grid.add(new Label("Screen Width (mm):"), 0, 0);
+			grid.add(widthField, 1, 0);
+			grid.add(new Label("Shooter Distance (mm):"), 0, 1);
+			grid.add(distanceField, 1, 1);
+
+			dialog.getDialogPane().setContent(grid);
+
+			dialog.setResultConverter(dialogButton -> {
+				if (dialogButton == okButtonType) {
+					return new Pair<>(widthField.getText(), distanceField.getText());
+				}
+				return null;
+			});
+
+			Optional<Pair<String, String>> result = dialog.showAndWait();
+
+			result.ifPresent(widthDistance -> {
+				try {
+					int width = Integer.parseInt(widthDistance.getKey());
+					int distance = Integer.parseInt(widthDistance.getValue());
+					
+					Dimension2D res = arenaPane.getArenaStageResolution();
+					double ratio = res.getHeight() / res.getWidth();
+					int height = (int)(width * ratio);
+
+					pm.setProjectionSize(width, height);
+					pm.setShooterDistance(distance);
+					pm.calculateRealWorldSize();
+					
+					logger.info("Manual Perspective Initialized: Width={}mm, Height={}mm, Distance={}mm", 
+						width, height, distance);
+				} catch (NumberFormatException e) {
+					logger.error("Invalid numbers entered for manual perspective", e);
+				}
+			});
+		});
 	}
 
 	@Override

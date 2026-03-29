@@ -133,8 +133,8 @@ public class PerspectiveManager {
 		cameraParameters.add(new CameraParameters("HD-3000", 4, 3.787, 2.864, new Dimension2D(640, 480)));
 	}
 
-	// For testing
-	protected PerspectiveManager(Bounds arenaBounds) {
+	// For manual/fallback initialization
+	public PerspectiveManager(Bounds arenaBounds) {
 		if (logger.isTraceEnabled())
 			logger.trace("pattern res w {} h {}", arenaBounds.getWidth(), arenaBounds.getHeight());
 		patternWidth = (int) arenaBounds.getWidth();
@@ -242,11 +242,9 @@ public class PerspectiveManager {
 
 	/*
 	 * The real world width and height of the projector arena in the camera feed
-	 * (in mm) -- currently only used for testing. Could ask the user to set
-	 * this manually, but this is enough of a pain that for now we just ask them
-	 * to calibrate with paper
+	 * (in mm).
 	 */
-	protected void setProjectionSize(int width, int height) {
+	public void setProjectionSize(int width, int height) {
 		if (logger.isTraceEnabled())
 			logger.trace("projection w {} h {}", width, height);
 
@@ -467,7 +465,7 @@ public class PerspectiveManager {
 			logger.trace("pW {} pH {} - pxW {} pxH {}", projectionWidth, projectionHeight, pxPerMMwide, pxPerMMhigh);
 	}
 
-	void calculateRealWorldSize()
+	public void calculateRealWorldSize()
 	{
 		logger.debug("calculateRealWorldSize");
 		

@@ -371,12 +371,20 @@ public class CanvasManager implements CameraView {
 	}
 
 	public Bounds translateCameraToCanvas(Bounds bounds) {
-		if (config.getDisplayWidth() == cameraManager.getFeedWidth()
-				&& config.getDisplayHeight() == cameraManager.getFeedHeight())
+		double displayWidth = config.getDisplayWidth();
+		double displayHeight = config.getDisplayHeight();
+
+		// Use actual background sizing if it's been initialized
+		if (background.getImage() != null) {
+			displayWidth = background.getBoundsInLocal().getWidth();
+			displayHeight = background.getBoundsInLocal().getHeight();
+		}
+
+		if (displayWidth == cameraManager.getFeedWidth() && displayHeight == cameraManager.getFeedHeight())
 			return bounds;
 
-		final double scaleX = (double) config.getDisplayWidth() / (double) cameraManager.getFeedWidth();
-		final double scaleY = (double) config.getDisplayHeight() / (double) cameraManager.getFeedHeight();
+		final double scaleX = displayWidth / (double) cameraManager.getFeedWidth();
+		final double scaleY = displayHeight / (double) cameraManager.getFeedHeight();
 
 		final double minX = (bounds.getMinX() * scaleX);
 		final double minY = (bounds.getMinY() * scaleY);
@@ -390,12 +398,20 @@ public class CanvasManager implements CameraView {
 	}
 
 	public Bounds translateCanvasToCamera(Bounds bounds) {
-		if (config.getDisplayWidth() == cameraManager.getFeedWidth()
-				&& config.getDisplayHeight() == cameraManager.getFeedHeight())
+		double displayWidth = config.getDisplayWidth();
+		double displayHeight = config.getDisplayHeight();
+
+		// Use actual background sizing if it's been initialized
+		if (background.getImage() != null) {
+			displayWidth = background.getBoundsInLocal().getWidth();
+			displayHeight = background.getBoundsInLocal().getHeight();
+		}
+
+		if (displayWidth == cameraManager.getFeedWidth() && displayHeight == cameraManager.getFeedHeight())
 			return bounds;
 
-		final double scaleX = (double) cameraManager.getFeedWidth() / (double) config.getDisplayWidth();
-		final double scaleY = (double) cameraManager.getFeedHeight() / (double) config.getDisplayHeight();
+		final double scaleX = (double) cameraManager.getFeedWidth() / displayWidth;
+		final double scaleY = (double) cameraManager.getFeedHeight() / displayHeight;
 
 		final double minX = (bounds.getMinX() * scaleX);
 		final double minY = (bounds.getMinY() * scaleY);
