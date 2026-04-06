@@ -400,15 +400,10 @@ public class CalibrationManager implements CameraCalibrationListener {
 		removeCalibrationTargetIfPresent();
 
 		QuadrilateralCalibrationUI previewOverlay = new QuadrilateralCalibrationUI(corners, true);
-		QuadrilateralCalibrationUI projectorOverlay = new QuadrilateralCalibrationUI(
-				projectorOverlayCornersFromPreviewCorners(corners), false);
+		QuadrilateralCalibrationUI projectorOverlay = new QuadrilateralCalibrationUI(createProjectorOverlayCorners(), false);
 
 		previewOverlay.setOnCornersChanged(() -> {
 			lastCalibrationCorners = Optional.of(copyCorners(previewOverlay.getCorners()));
-			if (projectorQuadrilateralUI.isPresent()) {
-				projectorQuadrilateralUI.get().setCorners(
-						projectorOverlayCornersFromPreviewCorners(previewOverlay.getCorners()));
-			}
 		});
 		previewOverlay.addEventFilter(KeyEvent.KEY_PRESSED, this::handleQuadrilateralKeyPressed);
 
@@ -743,18 +738,16 @@ public class CalibrationManager implements CameraCalibrationListener {
 		return canvasCorners;
 	}
 
-	private List<Point2D> projectorOverlayCornersFromPreviewCorners(List<Point2D> previewCorners) {
-		final double previewWidth = Math.max(1.0, config.getDisplayWidth());
-		final double previewHeight = Math.max(1.0, config.getDisplayHeight());
+	private List<Point2D> createProjectorOverlayCorners() {
 		Dimension2D projectorResolution = arenaPane.getArenaStageResolution();
 		final double projectorWidth = Math.max(1.0, projectorResolution.getWidth());
 		final double projectorHeight = Math.max(1.0, projectorResolution.getHeight());
 
 		final List<Point2D> projectorCorners = new ArrayList<>(4);
-		for (Point2D previewCorner : previewCorners) {
-			projectorCorners.add(new Point2D(previewCorner.getX() / previewWidth * projectorWidth,
-					previewCorner.getY() / previewHeight * projectorHeight));
-		}
+		projectorCorners.add(new Point2D(0, 0));
+		projectorCorners.add(new Point2D(projectorWidth, 0));
+		projectorCorners.add(new Point2D(projectorWidth, projectorHeight));
+		projectorCorners.add(new Point2D(0, projectorHeight));
 		return projectorCorners;
 	}
 

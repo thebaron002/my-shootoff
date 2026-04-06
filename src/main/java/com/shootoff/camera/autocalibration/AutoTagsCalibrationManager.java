@@ -29,6 +29,7 @@ public class AutoTagsCalibrationManager {
 	private static final long MINIMUM_INTERVAL = 120;
 	private static final int REQUIRED_STABLE_FRAMES = 4;
 	private static final double MAX_CORNER_DELTA_PX = 12.0;
+	private static final double QUIET_ZONE_TO_BODY_RATIO = (1.0 - 0.72) / (2.0 * 0.72);
 
 	private final CameraCalibrationListener calibrationListener;
 	private final SquareHamming_to_FiducialDetector<GrayU8> detector;
@@ -119,12 +120,31 @@ public class AutoTagsCalibrationManager {
 		if (!markerCorners.keySet().containsAll(Arrays.asList(0L, 1L, 2L, 3L))) return Optional.empty();
 
 		final List<Point2D> arenaCorners = new ArrayList<>(4);
-		arenaCorners.add(markerCorners.get(0L)[0]);
-		arenaCorners.add(markerCorners.get(1L)[1]);
-		arenaCorners.add(markerCorners.get(2L)[2]);
-		arenaCorners.add(markerCorners.get(3L)[3]);
+		arenaCorners.add(clampToFrame(extrapolateScreenCorner(markerCorners.get(0L), 0), frameWidth, frameHeight));
+		arenaCorners.add(clampToFrame(extrapolateScreenCorner(markerCorners.get(1L), 1), frameWidth, frameHeight));
+		arenaCorners.add(clampToFrame(extrapolateScreenCorner(markerCorners.get(2L), 2), frameWidth, frameHeight));
+		arenaCorners.add(clampToFrame(extrapolateScreenCorner(markerCorners.get(3L), 3), frameWidth, frameHeight));
 		if (!hasDistinctCorners(arenaCorners)) return Optional.empty();
 		return Optional.of(arenaCorners);
+	}
+
+	private Point2D extrapolateScreenCorner(Point2D[] corners, int screenCornerIndex) {
+		final Point2D corner = corners[screenCornerIndex];
+		final Point2D previous = corners[(screenCornerIndex + 3) % 4];
+		final Point2D next = corners[(screenCornerIndex + 1) % 4];
+
+		final Point2D awayFromPrevious = corner.subtract(previous).multiply(QUIET_ZONE_TO_BODY_RATIO);
+		final Point2D awayFromNext = corner.subtract(next).multiply(QUIET_ZONE_TO_BODY_RATIO);
+
+		return corner.add(awayFromPrevious).add(awayFromNext);
+	}
+
+	private Point2D clampToFrame(Point2D point, int frameWidth, int frameHeight) {
+		return new Point2D(clamp(point.getX(), 0.0, frameWidth), clamp(point.getY(), 0.0, frameHeight));
+	}
+
+	private double clamp(double value, double minimum, double maximum) {
+		return Math.max(minimum, Math.min(maximum, value));
 	}
 
 	private Point2D[] canonicalizeCorners(Polygon2D_F64 polygon) {
