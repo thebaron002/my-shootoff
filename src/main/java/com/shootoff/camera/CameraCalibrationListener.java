@@ -18,14 +18,18 @@
 
 package com.shootoff.camera;
 
+import java.util.List;
 import java.util.Optional;
 
 import javafx.geometry.Bounds;
 import javafx.geometry.Dimension2D;
+import javafx.geometry.Point2D;
 
 public interface CameraCalibrationListener {
 	public void calibrate(Bounds arenaBounds, Optional<Dimension2D> perspectivePaperDims, boolean calibratedFromCanvas,
 			long frameDelay);
 
 	public void setArenaBackground(String resourceFilename);
+
+	default void calibrationCornersDetected(List<Point2D> cornerPoints, boolean calibratedFromCanvas) {}
 }

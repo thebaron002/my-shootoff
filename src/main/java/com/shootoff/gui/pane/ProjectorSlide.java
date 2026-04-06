@@ -61,6 +61,7 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 	private final ExerciseSlide exerciseSlide;
 	private final SplitMenuButton calibrateButton;
 	private final RadioMenuItem autoGreenCalibrationItem;
+	private final RadioMenuItem autoTagsCalibrationItem;
 	private final RadioMenuItem manualCalibrationItem;
 
 	private ArenaBackgroundsSlide backgroundsSlide;
@@ -98,10 +99,13 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 		autoGreenCalibrationItem = new RadioMenuItem(CalibrationMode.AUTO_GREEN.getDisplayName());
 		autoGreenCalibrationItem.setToggleGroup(calibrationModeToggle);
 		autoGreenCalibrationItem.setOnAction((event) -> setCalibrationMode(CalibrationMode.AUTO_GREEN, true));
+		autoTagsCalibrationItem = new RadioMenuItem(CalibrationMode.AUTO_TAGS.getDisplayName());
+		autoTagsCalibrationItem.setToggleGroup(calibrationModeToggle);
+		autoTagsCalibrationItem.setOnAction((event) -> setCalibrationMode(CalibrationMode.AUTO_TAGS, true));
 		manualCalibrationItem = new RadioMenuItem(CalibrationMode.MANUAL.getDisplayName());
 		manualCalibrationItem.setToggleGroup(calibrationModeToggle);
 		manualCalibrationItem.setOnAction((event) -> setCalibrationMode(CalibrationMode.MANUAL, true));
-		calibrateButton.getItems().addAll(autoGreenCalibrationItem, manualCalibrationItem);
+		calibrateButton.getItems().addAll(autoGreenCalibrationItem, autoTagsCalibrationItem, manualCalibrationItem);
 		setCalibrationMode(config.getCalibrationMode(), false);
 
 		addSlideControlButton("Background", (event) -> {
@@ -164,6 +168,8 @@ public class ProjectorSlide extends Slide implements CalibrationConfigurator {
 
 		if (CalibrationMode.AUTO_GREEN.equals(calibrationMode)) {
 			autoGreenCalibrationItem.setSelected(true);
+		} else if (CalibrationMode.AUTO_TAGS.equals(calibrationMode)) {
+			autoTagsCalibrationItem.setSelected(true);
 		} else {
 			manualCalibrationItem.setSelected(true);
 		}

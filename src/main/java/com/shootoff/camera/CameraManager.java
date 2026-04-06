@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 
 import com.shootoff.ObservableCloseable;
 import com.shootoff.camera.autocalibration.AutoCalibrationManager;
+import com.shootoff.camera.autocalibration.AutoTagsCalibrationManager;
 import com.shootoff.camera.autocalibration.GreenScreenCalibrationManager;
 import com.shootoff.camera.cameratypes.Camera;
 import com.shootoff.camera.cameratypes.Camera.CameraState;
@@ -70,6 +71,7 @@ import com.xuggle.xuggler.video.IConverter;
 import com.shootoff.util.SwingFXUtils;
 import javafx.geometry.Bounds;
 import javafx.geometry.Dimension2D;
+import javafx.geometry.Point2D;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.paint.Color;
@@ -84,7 +86,8 @@ import javafx.scene.paint.Color;
 public class CameraManager implements ObservableCloseable, CameraEventListener, CameraCalibrationListener {
 	private enum AutoCalibrationEngine {
 		LEGACY_PATTERN,
-		GREEN_SCREEN
+		GREEN_SCREEN,
+		AUTO_TAGS
 	}
 
 	private static final int MAXIMUM_CONSECUTIVE_CAMERA_ERRORS = 5;
@@ -137,6 +140,7 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 
 	protected AutoCalibrationManager acm = null;
 	protected GreenScreenCalibrationManager greenAcm = null;
+	protected AutoTagsCalibrationManager tagsAcm = null;
 	private final AtomicBoolean isAutoCalibrating = new AtomicBoolean(false);
 	protected boolean cameraAutoCalibrated = false;
 	private AutoCalibrationEngine activeAutoCalibrationEngine = AutoCalibrationEngine.LEGACY_PATTERN;
@@ -624,6 +628,8 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 		if (isAutoCalibrating.get()) {
 			if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
 				greenAcm.processFrame(currentFrame);
+			} else if (AutoCalibrationEngine.AUTO_TAGS.equals(activeAutoCalibrationEngine) && tagsAcm != null) {
+				tagsAcm.processFrame(currentFrame);
 			} else if (acm != null) {
 				acm.processFrame(currentFrame);
 			}
@@ -770,6 +776,8 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	private void fireAutoCalibration() {
 		if (AutoCalibrationEngine.GREEN_SCREEN.equals(activeAutoCalibrationEngine) && greenAcm != null) {
 			greenAcm.reset();
+		} else if (AutoCalibrationEngine.AUTO_TAGS.equals(activeAutoCalibrationEngine) && tagsAcm != null) {
+			tagsAcm.reset();
 		} else if (acm != null) {
 			acm.reset();
 		}
@@ -802,6 +810,16 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	}
 
 	public void enableAutoCalibration(CalibrationMode calibrationMode, boolean calculateFrameDelay) {
+		if (CalibrationMode.AUTO_TAGS.equals(calibrationMode)) {
+			if (tagsAcm == null) tagsAcm = new AutoTagsCalibrationManager(this);
+			activeAutoCalibrationEngine = AutoCalibrationEngine.AUTO_TAGS;
+			isAutoCalibrating.set(true);
+			cameraAutoCalibrated = false;
+
+			fireAutoCalibration();
+			return;
+		}
+
 		if (!CalibrationMode.AUTO_GREEN.equals(calibrationMode)) {
 			enableAutoCalibration(calculateFrameDelay);
 			return;
@@ -871,6 +889,14 @@ public class CameraManager implements ObservableCloseable, CameraEventListener, 
 	public void calibrate(Bounds arenaBounds, Optional<Dimension2D> perspectivePaperDims, boolean calibratedFromCanvas,
 			long delay) {
 		autoCalibrateSuccess(arenaBounds, perspectivePaperDims, delay);
+	}
+
+	@Override
+	public void calibrationCornersDetected(List<Point2D> cornerPoints, boolean calibratedFromCanvas) {
+		if (cameraCalibrationListener == null || !isAutoCalibrating.get()) return;
+
+		isAutoCalibrating.set(false);
+		cameraCalibrationListener.calibrationCornersDetected(cornerPoints, calibratedFromCanvas);
 	}
 
 	public Point undistortCoords(int x, int y) {
